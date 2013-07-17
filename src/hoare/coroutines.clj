@@ -32,6 +32,27 @@
   
   nil)
 
+;; This function demonstrates that it is possible to call close! inside a go block        
+(defn foo []
+  (let [c (chan)]
+    (go (close! c))))
+
+;; In this function, I get an exception "Can't put nil on channel"
+(defn test-copy-and-close []
+  (let [east (chan)
+        west (chan)]
+    (copy west east)
+    
+    (go
+      (dotimes [i 10]
+        (>! west i))
+      (close! west))
+    
+    (go-loop
+      (println (<! east))))
+  
+  nil)
+
 ;; 3.2 SQUASH
 
 (defn squash [west east]
@@ -73,7 +94,6 @@ Deal sensibly with input which ends with an odd number of asterisks."
                 :else (>! east \^) )))))
       ;; Return the control channel:
       control)))
-
 
 (defn chars>!
   "Send all the chars of string to channel, then (if control is specified) signal completion by sending :exit to control"
@@ -246,6 +266,4 @@ This elementary problem is difficult to solve elegantly without coroutines."
     (print-chars<! lineprinter)
     
     nil))
-        
-        
     
