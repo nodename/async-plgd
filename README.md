@@ -7,7 +7,9 @@ Examples corresponding to those in C.A.R. Hoare,
 This paper is the precursor to his book of the same title,
 which can be obtained at http://www.usingcsp.com/
 
-#### hoare/coroutines.clj: section 3 of the paper, "Coroutines"
+#### coroutines.clj:
+
+section 3 of the paper, "Coroutines"
 
 ## Usage
 
