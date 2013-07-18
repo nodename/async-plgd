@@ -1,44 +1,59 @@
 (ns hoare.coroutines
   (:require [clojure.core.async :refer :all]))
 
-;; Examples corresponding to those in section 3 of C.A.R. Hoare, "Communicating Sequential Processes" (CACM 21:8 August 1978),
-;; the precursor to his book of the same title, which can be obtained at http://www.usingcsp.com/
+;; Examples corresponding to those in section 3 of C.A.R. Hoare,
+;; "Communicating Sequential Processes" (CACM 21:8 August 1978).
+;; This paper is the precursor to his book of the same title,
+;; which can be obtained at http://www.usingcsp.com/
 
 (defmacro go-times [bindings & body]
   `(go (dotimes ~bindings
-         ~@body)))
-
-(defmacro go-loop [& body]
-  `(go (while true
          ~@body)))
 
 ;; 3.1 COPY
 
 (defn copy [west east]
   "Copy from channel west into channel east"
-  (go-loop
-    (>! east (<! west))))
-
+  (go
+    (loop []
+      (let [value (<! west)]
+        ;; this value will be nil if close! has been called on the channel.
+        ;; we cannot copy nil to east because explicitly putting a nil is not allowed.
+        (if (nil? value)
+          (close! east)
+          (do
+            (>! east value)
+            (recur)))))))
+          
 (defn test-copy []
+  "Print out all the numbers from 0 to 9,
+then two seconds later print out the numbers from 10 to 19"
   (let [east (chan)
-        west (chan)]
+        west (chan)
+        ;; a channel that will close after 2000 ms:
+        timeout (timeout 2000)]
+    
+    ;; this process will remain ready to copy
     (copy west east)
     
-    (go-times [i 100]
-              (>! west i))
+    (go
+      (dotimes [i 10]
+        (>! west i))
+      (<! timeout)
+      (dotimes [i 10]
+        (>! west (+ 10 i))))
     
-    (go-loop
-      (println (<! east))))
+    ;; this process will remain ready to print
+    (go
+      (loop []
+        (println (<! east))
+        (recur))))
   
   nil)
 
-;; This function demonstrates that it is possible to call close! inside a go block        
-(defn foo []
-  (let [c (chan)]
-    (go (close! c))))
-
-;; In this function, I get an exception "Can't put nil on channel"
 (defn test-copy-and-close []
+  "Print out all the numbers from 0 to 9,
+then fail to print out the numbers from 10 to 19"
   (let [east (chan)
         west (chan)]
     (copy west east)
@@ -46,112 +61,117 @@
     (go
       (dotimes [i 10]
         (>! west i))
-      (close! west))
+      (close! west)
+      (dotimes [i 10]
+        (>! west (+ 10 i))))
     
-    (go-loop
+    ;; since west has closed, copy will close east;
+    ;; once east has closed, we will forever get nils from it;
+    ;; we never see the values put to west after west has closed;
+    ;; they never even made it onto west
+    (go-times [i 20]
       (println (<! east))))
   
   nil)
 
 ;; 3.2 SQUASH
 
-(defn squash [west east]
-  "Copy from channel west into channel east but replace every pair of consecutive asterisks '**' by an upward arrow '^'.
-Assume that the final character input is not an asterisk."
-  (go-loop
-    (let [value (<! west)]
-      (if (not= value \*)
-        (>! east value)
-        (let [value (<! west)]
-          (if (not= value \*)
-            (do
-              (>! east \*)
-              (>! east value))
-            (>! east \^)))))))
-
-;; close! is not of much use since you can't call it within a go block or a thread.
-;; So you need a control channel to signal end of input.
-(defn squash-2
+(defn squash
   "Copy from channel west into channel east but replace every pair of consecutive asterisks '**' by an upward arrow '^'.
 Deal sensibly with input which ends with an odd number of asterisks."
-  ([west east]
-    (squash-2 west east nil))
-  ([west east east-control]
-    (let [control (chan)]
-      (go-loop
-        (let [value (<! west)]
-          (if (not= value \*)
-            (>! east value)
-            (let [[value source] (alts! [west control])]
-              (cond
-                (= source control) (do
-                                     (>! east \*)
-                                     (when-not (nil? east-control)
-                                       (>! east-control value)))
-                (not= value \*) (do
-                                  (>! east \*)
-                                  (>! east value))
-                :else (>! east \^) )))))
-      ;; Return the control channel:
-      control)))
+  [west east]
+      (go
+        (loop []
+          (let [value (<! west)]
+            (cond
+              (nil? value) (close! east)
+              (not= value \*) (do
+                                (>! east value)
+                                (recur))
+              :else (let [value (<! west)]
+                      (cond
+                        (nil? value) (do
+                                       (>! east \*)
+                                       (close! east))
+                        (not= value \*) (do
+                                          (>! east \*)
+                                          (>! east value)
+                                          (recur))
+                        :else (do
+                                (>! east \^)
+                                (recur)))))))))
 
 (defn chars>!
-  "Send all the chars of string to channel, then (if control is specified) signal completion by sending :exit to control"
+  "Send all the chars of string to channel, then (if close is specified) signal completion by closing channel"
   ([channel string]
     (chars>! channel string nil))
-  ([channel string control]
+  ([channel string close]
     (go
       (dotimes [i (.length string)]
         (>! channel (.charAt string i)))
-      (when-not (nil? control)
-        (>! control :exit)))))
+      (when-not (nil? close)
+        (close! channel)))))
 
 (defn print-chars<! [channel]
-  "Dump everything from channel to stdout"
-  (go-loop
-    (.print System/out (<! channel))))
-      ; This is different from (print (<! channel)), which doesn't flush everything until the user hits return!
+  "Dump everything from channel to stdout until channel closes, then print a newline"
+  (go
+    (loop []
+      (let [value (<! channel)]
+        (if (nil? value)
+          (println "")
+          (do
+            (.print System/out value)
+            ; This is apparently different from (print value), which doesn't flush everything until the user hits return!
+            (recur)))))))
 
-(defn test-squasher [squasher string]
-  (let [east (chan)
-        west (chan)
-        control (squasher west east)]
+(defn test-squasher
+  [string]
+    (let [east (chan)
+          west (chan)]
+      (squash west east)
+      
+      (chars>! west string :close)
+      
+      (print-chars<! east))
     
-    (chars>! west string control)
-    
-    (print-chars<! east)
-    
-    nil))
+    nil)
 
 (defn test-squash []
-  (test-squasher squash "here****there*p"))
-
-(defn test-squash-2 []
-  (test-squasher squash-2 "here****there*p***"))
+  "Print out 'here^^there*p^*'"
+  (test-squasher "here****there*p***"))
 
 ;; 3.3 DISASSEMBLE
+
+(def cardimage-without-first-char "1234567891123456789212345678931234567894123456789512345678961234567897123456789")
+(defn cardimage [digit]
+  (str digit cardimage-without-first-char))
 
 (defn disassemble [cardfile X]
   "Read cards from cardfile and output to X the stream of characters they contain.
 An extra space should be inserted at the end of each card."
-  (go-loop
-    (let [cardimage (<! cardfile)]
-      (dotimes [i 80]
-        (>! X (.charAt cardimage i)))
-      (>! X \space))))
+  (go
+    (loop []
+      (let [cardimage (<! cardfile)]
+        (if (nil? cardimage)
+          (close! X)
+          (do
+            (dotimes [i 80]
+              (>! X (.charAt cardimage i)))
+            (>! X \space)
+            (recur)))))))
 
 (defn test-disassemble []
+  "Dump cardimages 0 through 9 to stdout with a space after each"
   (let [cardfile (chan)
         X (chan)]
     (disassemble cardfile X)
     
-    (let [cardimage "01234567891123456789212345678931234567894123456789512345678961234567897123456789"]
-      (go-times [i 10]
-        (>! cardfile cardimage)))
+    (go-times [i 10]
+              (>! cardfile (cardimage i)))
     
-    (print-chars<! X)
-    
-    nil))
+    (print-chars<! X))
+  
+  nil)
     
 ;; 3.4 ASSEMBLE
 
@@ -161,35 +181,31 @@ The last line should be completed with spaces (or pad-char, if specified) if nec
   ([X lineprinter]
     (assemble X lineprinter \space))
   ([X lineprinter pad-char]
-    (let [control (chan)]
-      (go-loop
+    (go
+      (loop []
         (loop [lineimage ""]
           (let [i (.length lineimage)
-                [char source] (alts! [X control])]
-         ;   (println "ass: got " char)
+                char (<! X)]
             (cond
-              (= source control) (do
-                                ;   (println "ass: sending " (apply str lineimage (repeat (- 125 i) pad-char)))
-                                   (>! lineprinter (apply str lineimage (repeat (- 125 i) pad-char)))
-                                ;   (println "ass: sending \n")
-                                   (>! lineprinter \newline))
+              (nil? char) (do
+                            (>! lineprinter (apply str lineimage (repeat (- 125 i) pad-char)))
+                            (>! lineprinter \newline)
+                            (close! lineprinter))
               (< i 125) (recur (str lineimage char))
               :else (do
-                  ;    (println "ass: sending " lineimage)
                       (>! lineprinter lineimage)
-                   ;   (println "ass: sending \n")
                       (>! lineprinter \newline)
-                      (recur ""))))))
-      control)))
+                      (recur "")))))))))
 
 (defn test-assemble []
+  "Dump cardimages 0 through 9 to stdout in lines of 125 characters.
+Pad the last line with Xs to 125 characters."
   (let [X (chan)
-        lineprinter (chan)
-        control (assemble X lineprinter \X)]
-    (let [cardimage "01234567891123456789212345678931234567894123456789512345678961234567897123456789"]
-      (chars>! X (apply str (repeat 10 cardimage)) control))
-    (print-chars<! lineprinter)
-    nil))
+        lineprinter (chan)]
+    (assemble X lineprinter \X)
+    (chars>! X (apply str (for [i (range 10)] (cardimage i))) :close)
+    (print-chars<! lineprinter))
+  nil)
     
 ;; 3.5 REFORMAT
 
@@ -201,10 +217,9 @@ This elementary problem is difficult to solve elegantly without coroutines."
   ([cardfile lineprinter]
     (reformat cardfile lineprinter \space))
   ([cardfile lineprinter pad-char]
-    (let [X (chan)
-          _ (disassemble cardfile X)
-          control (assemble X lineprinter pad-char)]
-      control)))
+    (let [X (chan)]
+      (disassemble cardfile X)
+      (assemble X lineprinter pad-char))))
 
 (defn reformat-2
   "Same as reformat but with a copy coroutine in the middle"
@@ -212,26 +227,24 @@ This elementary problem is difficult to solve elegantly without coroutines."
     (reformat-2 cardfile lineprinter \space))
   ([cardfile lineprinter pad-char]
     (let [X (chan)
-          Y (chan)
-          _ (disassemble cardfile X)
-          _ (copy X Y)
-          control (assemble Y lineprinter pad-char)]
-      control))) 
+          Y (chan)]
+      (disassemble cardfile X)
+      (copy X Y)
+      (assemble Y lineprinter pad-char))))
 
 (defn test-reformatter [reformatter]
   (let [cardfile (chan)
-        lineprinter (chan)
-        control (reformatter cardfile lineprinter \X)]
+        lineprinter (chan)]
+    (reformatter cardfile lineprinter \X)
     
-    (let [cardimage "1234567891123456789212345678931234567894123456789512345678961234567897123456789"]
-      (go
-        (dotimes [i 10]
-          (>! cardfile (str i cardimage)))
-        (>! control :exit)))
+    (go
+      (dotimes [i 10]
+        (>! cardfile (cardimage i)))
+      (close! cardfile))
     
-    (print-chars<! lineprinter)
-    
-    nil))
+    (print-chars<! lineprinter))
+  
+  nil)
 
 (defn test-reformat []
   (test-reformatter reformat))
@@ -240,6 +253,7 @@ This elementary problem is difficult to solve elegantly without coroutines."
   (test-reformatter reformat-2))
 
 ;; 3.6 CONWAY'S PROBLEM
+;; Not that Conway!
 
 (defn conway
   "Adapt the reformat program to replace every pair of consecutive asterisks by an upward arrow."
@@ -247,23 +261,28 @@ This elementary problem is difficult to solve elegantly without coroutines."
     (conway cardfile lineprinter \space))
   ([cardfile lineprinter pad-char]
     (let [X (chan)
-          Y (chan)
-          _ (disassemble cardfile X)
-          _ (squash X Y)
-          control (assemble Y lineprinter pad-char)]
-      control))) 
+          Y (chan)]
+      (disassemble cardfile X)
+      (squash X Y)
+      (assemble Y lineprinter pad-char)))
+  nil)
+
+(defn cardimage-with-stars [i]
+  "Replace one random character in cardimage i with a pair of asterisks"
+  (let [cardimage (cardimage i)
+        index (int (+ 1 (rand 79)))
+        front (.substring cardimage 0 (- index 1))
+        back (.substring cardimage index)]
+    (str front "**" back)))
 
 (defn test-conway []
   (let [cardfile (chan)
-        lineprinter (chan)
-        control (conway cardfile lineprinter \X)]
+        lineprinter (chan)]
+    (conway cardfile lineprinter \X)
     
-    (let [cardimage "01234567891123456789212345678931234567894123456789512345678961234567897123456789"]
-      (go
-          (>! cardfile cardimage)
-          (>! control :exit)))
+    (go
+      (dotimes [i 10]
+        (>! cardfile (cardimage-with-stars i)))
+      (close! cardfile))
     
-    (print-chars<! lineprinter)
-    
-    nil))
-    
+    (print-chars<! lineprinter)))

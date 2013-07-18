@@ -1,6 +1,13 @@
 # async-plgd
 
-Trying out Clojure's core.async library.
+### hoare:
+
+Examples corresponding to those in C.A.R. Hoare,
+"Communicating Sequential Processes" (CACM 21:8 August 1978).
+This paper is the precursor to his book of the same title,
+which can be obtained at http://www.usingcsp.com/
+
+#### hoare/coroutines.clj: section 3 of the paper, "Coroutines"
 
 ## Usage
 
@@ -16,14 +23,6 @@ Then open a repl, and at the prompt, type
 ```
 
 and run any of the test functions in src/hoare/coroutines.clj.
-
-None of the functions from 3.5 REFORMAT onwards, which execute pipelined coroutines,
-work reliably. I believe this indicates that a control channel must be threaded through
-the pipeline, even through stateless routines such as COPY.
-
-Or there may be a bug in core.async.
-
-Or, most likely, I'm doing it wrong.
 
 ## License
 
