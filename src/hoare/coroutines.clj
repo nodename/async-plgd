@@ -24,7 +24,7 @@
           (do
             (>! east value)
             (recur)))))))
-          
+
 (defn test-copy []
   "Print out all the numbers from 0 to 9,
 then two seconds later print out the numbers from 10 to 19"
@@ -264,8 +264,8 @@ This elementary problem is difficult to solve elegantly without coroutines."
           Y (chan)]
       (disassemble cardfile X)
       (squash X Y)
-      (assemble Y lineprinter pad-char)))
-  nil)
+      (assemble Y lineprinter pad-char))
+    nil))
 
 (defn cardimage-with-stars [i]
   "Replace one random character in cardimage i with a pair of asterisks"
@@ -285,4 +285,5 @@ This elementary problem is difficult to solve elegantly without coroutines."
         (>! cardfile (cardimage-with-stars i)))
       (close! cardfile))
     
-    (print-chars<! lineprinter)))
+    (print-chars<! lineprinter))
+  nil)
