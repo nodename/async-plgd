@@ -12,6 +12,12 @@
 
 ;; 3.1 COPY
 
+;; The first common pattern of the Go language is
+;; GENERATOR: a function that returns a channel.
+;; The channel is running the go block defined in the function;
+;; thus the channel is a handle on a service.
+;; We use this pattern throughout the examples.
+
 (defn copier [source]
   "A process that copies values from the source channel"
   (let [c (chan)]
@@ -31,7 +37,7 @@
   "Print out all the numbers from 0 to 9,
 then after two seconds print out the numbers from 10 to 19"
   (let [west (chan)
-        ;; this process will remain ready to copy:
+        ;; this process will remain ready to copy...
         east (copier west)
         ;; a channel that will close after 2000 ms:
         timeout (timeout 2000)]
@@ -39,16 +45,18 @@ then after two seconds print out the numbers from 10 to 19"
     (go
       (dotimes [i 10]
         (>! west i))
+      ;; the only value that will come from the timeout is the nil when it closes:
       (<! timeout)
       (dotimes [i 10]
         (>! west (+ 10 i))))
     
-    ;; this process will remain ready to print:
+    ;; this process will remain ready to print...
     (go
       (loop []
         (println (<! east))
         (recur))))
   
+  ;; until all the processes go away when they go out of scope:
   nil)
 
 (defn test-copy-and-close []
@@ -206,6 +214,9 @@ Pad the last line with Xs to 125 characters."
   nil)
     
 ;; 3.5 REFORMAT
+
+;; That GENERATOR pattern totally simplifies the composition of processes!
+;; We just use a threading macro!
 
 (defn reformatter
   "Read a sequence of cards of 80 characters each, and print the characters on a lineprinter at 125 characters per line.
