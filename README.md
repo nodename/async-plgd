@@ -11,6 +11,10 @@ which can be obtained at http://www.usingcsp.com/
 
 section 3 of the paper, "Coroutines"
 
+#### subroutines.clj:
+
+section 4 of the paper, "Subroutines"
+
 ## Usage
 
 Clone the [core.async](http://github.com/clojure/core.async) repo to a
@@ -21,10 +25,15 @@ Then clone this repo into a convenient location and `cd` into it.
 Then open a repl, and at the prompt, type
 
 ```
-(use :reload-all 'hoare.coroutines)
+(use 'hoare.coroutines)
+```
+or
+
+```
+(use 'hoare.subroutines)
 ```
 
-and run any of the test functions in src/hoare/coroutines.clj.
+and run any of the test functions in the corresponding .clj file.
 
 ## License
 
