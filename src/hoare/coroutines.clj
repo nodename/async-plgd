@@ -12,29 +12,29 @@
 
 ;; 3.1 COPY
 
-(defn copy [west east]
-  "Copy from channel west into channel east"
-  (go
-    (loop []
-      (let [value (<! west)]
-        ;; this value will be nil if close! has been called on the channel.
-        ;; we cannot copy nil to east because explicitly putting a nil is not allowed.
-        (if (nil? value)
-          (close! east)
-          (do
-            (>! east value)
-            (recur)))))))
+(defn copier [source]
+  "A process that copies values from the source channel"
+  (let [c (chan)]
+    (go
+      (loop []
+        (let [value (<! source)]
+          ;; this value will be nil if close! has been called on the channel.
+          ;; we cannot copy nil to c because explicitly putting a nil is not allowed.
+          (if (nil? value)
+            (close! c)
+            (do
+              (>! c value)
+              (recur))))))
+    c))
 
 (defn test-copy []
   "Print out all the numbers from 0 to 9,
-then two seconds later print out the numbers from 10 to 19"
-  (let [east (chan)
-        west (chan)
+then after two seconds print out the numbers from 10 to 19"
+  (let [west (chan)
+        ;; this process will remain ready to copy:
+        east (copier west)
         ;; a channel that will close after 2000 ms:
         timeout (timeout 2000)]
-    
-    ;; this process will remain ready to copy
-    (copy west east)
     
     (go
       (dotimes [i 10]
@@ -54,10 +54,9 @@ then two seconds later print out the numbers from 10 to 19"
 (defn test-copy-and-close []
   "Print out all the numbers from 0 to 9,
 then fail to print out the numbers from 10 to 19"
-  (let [east (chan)
-        west (chan)]
-    (copy west east)
-    
+  (let [
+        west (chan)
+        east (copier west)]
     (go
       (dotimes [i 10]
         (>! west i))
@@ -65,7 +64,7 @@ then fail to print out the numbers from 10 to 19"
       (dotimes [i 10]
         (>! west (+ 10 i))))
     
-    ;; since west has closed, copy will close east;
+    ;; since west has closed, copier will close east;
     ;; once east has closed, we will forever get nils from it;
     ;; we never see the values put to west after west has closed;
     ;; they never even made it onto west
@@ -76,10 +75,9 @@ then fail to print out the numbers from 10 to 19"
 
 ;; 3.2 SQUASH
 
-(defn squash
+(defn squasher [east west]
   "Copy from channel west into channel east but replace every pair of consecutive asterisks '**' by an upward arrow '^'.
 Deal sensibly with input which ends with an odd number of asterisks."
-  [west east]
       (go
         (loop []
           (let [value (<! west)]
@@ -222,14 +220,13 @@ This elementary problem is difficult to solve elegantly without coroutines."
       (assemble X lineprinter pad-char))))
 
 (defn reformat-2
-  "Same as reformat but with a copy coroutine in the middle"
+  "Same as reformat but with a copier coroutine in the middle"
    ([cardfile lineprinter]
     (reformat-2 cardfile lineprinter \space))
   ([cardfile lineprinter pad-char]
     (let [X (chan)
-          Y (chan)]
+          Y (copier X)]
       (disassemble cardfile X)
-      (copy X Y)
       (assemble Y lineprinter pad-char))))
 
 (defn test-reformatter [reformatter]
