@@ -43,7 +43,7 @@ then after two seconds print out the numbers from 10 to 19"
       (dotimes [i 10]
         (>! west (+ 10 i))))
     
-    ;; this process will remain ready to print
+    ;; this process will remain ready to print:
     (go
       (loop []
         (println (<! east))
@@ -54,8 +54,7 @@ then after two seconds print out the numbers from 10 to 19"
 (defn test-copy-and-close []
   "Print out all the numbers from 0 to 9,
 then fail to print out the numbers from 10 to 19"
-  (let [
-        west (chan)
+  (let [west (chan)
         east (copier west)]
     (go
       (dotimes [i 10]
@@ -75,29 +74,31 @@ then fail to print out the numbers from 10 to 19"
 
 ;; 3.2 SQUASH
 
-(defn squasher [east west]
-  "Copy from channel west into channel east but replace every pair of consecutive asterisks '**' by an upward arrow '^'.
+(defn squasher [source]
+  "Copy from source channel but replace every pair of consecutive asterisks '**' by an upward arrow '^'.
 Deal sensibly with input which ends with an odd number of asterisks."
+  (let [c (chan)]
       (go
         (loop []
-          (let [value (<! west)]
+          (let [value (<! source)]
             (cond
-              (nil? value) (close! east)
+              (nil? value) (close! c)
               (not= value \*) (do
-                                (>! east value)
+                                (>! c value)
                                 (recur))
-              :else (let [value (<! west)]
+              :else (let [value (<! source)]
                       (cond
                         (nil? value) (do
-                                       (>! east \*)
-                                       (close! east))
+                                       (>! c \*)
+                                       (close! c))
                         (not= value \*) (do
-                                          (>! east \*)
-                                          (>! east value)
+                                          (>! c \*)
+                                          (>! c value)
                                           (recur))
                         :else (do
-                                (>! east \^)
-                                (recur)))))))))
+                                (>! c \^)
+                                (recur))))))))
+      c))
 
 (defn chars>!
   "Send all the chars of string to channel, then (if close is specified) signal completion by closing channel"
@@ -122,12 +123,10 @@ Deal sensibly with input which ends with an odd number of asterisks."
             ; This is apparently different from (print value), which doesn't flush everything until the user hits return!
             (recur)))))))
 
-(defn test-squasher
+(defn test-squasher-with
   [string]
-    (let [east (chan)
-          west (chan)]
-      (squash west east)
-      
+    (let [west (chan)
+          east (squasher west)]
       (chars>! west string :close)
       
       (print-chars<! east))
@@ -136,7 +135,7 @@ Deal sensibly with input which ends with an odd number of asterisks."
 
 (defn test-squash []
   "Print out 'here^^there*p^*'"
-  (test-squasher "here****there*p***"))
+  (test-squasher-with "here****there*p***"))
 
 ;; 3.3 DISASSEMBLE
 
@@ -144,125 +143,123 @@ Deal sensibly with input which ends with an odd number of asterisks."
 (defn cardimage [digit]
   (str digit cardimage-without-first-char))
 
-(defn disassemble [cardfile X]
-  "Read cards from cardfile and output to X the stream of characters they contain.
+(defn disassembler [cardfile]
+  "Read cards from cardfile and output the stream of characters they contain.
 An extra space should be inserted at the end of each card."
-  (go
-    (loop []
-      (let [cardimage (<! cardfile)]
-        (if (nil? cardimage)
-          (close! X)
-          (do
-            (dotimes [i 80]
-              (>! X (.charAt cardimage i)))
-            (>! X \space)
-            (recur)))))))
+  (let [c (chan)]
+    (go
+      (loop []
+        (let [cardimage (<! cardfile)]
+          (if (nil? cardimage)
+            (close! c)
+            (do
+              (dotimes [i 80]
+                (>! c (.charAt cardimage i)))
+              (>! c \space)
+              (recur))))))
+  c))
 
 (defn test-disassemble []
   "Dump cardimages 0 through 9 to stdout with a space after each"
   (let [cardfile (chan)
-        X (chan)]
-    (disassemble cardfile X)
-    
+        disassembler (disassembler cardfile)]
     (go-times [i 10]
               (>! cardfile (cardimage i)))
     
-    (print-chars<! X))
+    (print-chars<! disassembler))
   
   nil)
     
 ;; 3.4 ASSEMBLE
 
-(defn assemble
-  "Read a stream of characters from X and print them in lines of 125 characters on lineprinter.
+(defn assembler
+  "Read a stream of characters from source channel and print them in lines of 125 characters, as on a lineprinter.
 The last line should be completed with spaces (or pad-char, if specified) if necessary."
-  ([X lineprinter]
-    (assemble X lineprinter \space))
-  ([X lineprinter pad-char]
-    (go
-      (loop []
-        (loop [lineimage ""]
-          (let [i (.length lineimage)
-                char (<! X)]
-            (cond
-              (nil? char) (do
-                            (>! lineprinter (apply str lineimage (repeat (- 125 i) pad-char)))
-                            (>! lineprinter \newline)
-                            (close! lineprinter))
-              (< i 125) (recur (str lineimage char))
-              :else (do
-                      (>! lineprinter lineimage)
-                      (>! lineprinter \newline)
-                      (recur "")))))))))
+  ([source]
+    (assembler \space source))
+  ([pad-char source]
+    (let [lineprinter (chan)]
+      (go
+        (loop []
+          (loop [lineimage ""]
+            (let [i (.length lineimage)
+                  char (<! source)]
+              (cond
+                (nil? char) (do
+                              (>! lineprinter (apply str lineimage (repeat (- 125 i) pad-char)))
+                              (>! lineprinter \newline)
+                              (close! lineprinter))
+                (< i 125) (recur (str lineimage char))
+                :else (do
+                        (>! lineprinter lineimage)
+                        (>! lineprinter \newline)
+                        (recur "")))))))
+      lineprinter)))
 
 (defn test-assemble []
   "Dump cardimages 0 through 9 to stdout in lines of 125 characters.
 Pad the last line with Xs to 125 characters."
-  (let [X (chan)
-        lineprinter (chan)]
-    (assemble X lineprinter \X)
-    (chars>! X (apply str (for [i (range 10)] (cardimage i))) :close)
+  (let [cardfile (chan)
+        lineprinter (assembler \X cardfile)]
+    (chars>! cardfile (apply str (for [i (range 10)] (cardimage i))) :close)
     (print-chars<! lineprinter))
   nil)
     
 ;; 3.5 REFORMAT
 
-(defn reformat
+(defn reformatter
   "Read a sequence of cards of 80 characters each, and print the characters on a lineprinter at 125 characters per line.
 Every card should be followed by an extra space, and the last line should be completed with spaces if necessary.
 ...
 This elementary problem is difficult to solve elegantly without coroutines."
-  ([cardfile lineprinter]
-    (reformat cardfile lineprinter \space))
-  ([cardfile lineprinter pad-char]
-    (let [X (chan)]
-      (disassemble cardfile X)
-      (assemble X lineprinter pad-char))))
+  ([cardfile]
+    (reformatter \space cardfile))
+  ([pad-char cardfile]
+    (->> cardfile
+      disassembler
+      (assembler pad-char))))
 
-(defn reformat-2
-  "Same as reformat but with a copier coroutine in the middle"
-   ([cardfile lineprinter]
-    (reformat-2 cardfile lineprinter \space))
-  ([cardfile lineprinter pad-char]
-    (let [X (chan)
-          Y (copier X)]
-      (disassemble cardfile X)
-      (assemble Y lineprinter pad-char))))
+(defn reformatter-2
+  "Same as reformatter but with a copier coroutine in the middle"
+   ([cardfile]
+    (reformatter-2 \space cardfile))
+  ([pad-char cardfile]
+    (->> cardfile
+      disassembler
+      copier
+      (assembler pad-char))))
 
 (defn test-reformatter [reformatter]
   (let [cardfile (chan)
-        lineprinter (chan)]
-    (reformatter cardfile lineprinter \X)
+        reformatter (reformatter \X cardfile)]
     
     (go
       (dotimes [i 10]
         (>! cardfile (cardimage i)))
       (close! cardfile))
     
-    (print-chars<! lineprinter))
+    (print-chars<! reformatter))
   
   nil)
 
 (defn test-reformat []
-  (test-reformatter reformat))
+  (test-reformatter reformatter))
 
 (defn test-reformat-2 []
-  (test-reformatter reformat-2))
+  (test-reformatter reformatter-2))
 
 ;; 3.6 CONWAY'S PROBLEM
 ;; Not that Conway!
 
 (defn conway
-  "Adapt the reformat program to replace every pair of consecutive asterisks by an upward arrow."
-   ([cardfile lineprinter]
-    (conway cardfile lineprinter \space))
-  ([cardfile lineprinter pad-char]
-    (let [X (chan)
-          Y (chan)]
-      (disassemble cardfile X)
-      (squash X Y)
-      (assemble Y lineprinter pad-char))
-    nil))
+  "Adapt the reformatter to replace every pair of consecutive asterisks by an upward arrow."
+   ([cardfile]
+    (conway \space cardfile))
+  ([pad-char cardfile]
+    (->> cardfile
+      disassembler
+      squasher
+      (assembler pad-char))))
 
 (defn cardimage-with-stars [i]
   "Replace one random character in cardimage i with a pair of asterisks"
@@ -274,13 +271,13 @@ This elementary problem is difficult to solve elegantly without coroutines."
 
 (defn test-conway []
   (let [cardfile (chan)
-        lineprinter (chan)]
-    (conway cardfile lineprinter \X)
+        conway (conway \X cardfile)]
     
     (go
       (dotimes [i 10]
         (>! cardfile (cardimage-with-stars i)))
       (close! cardfile))
     
-    (print-chars<! lineprinter))
+    (print-chars<! conway))
+  
   nil)
