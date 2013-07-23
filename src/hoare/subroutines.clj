@@ -47,14 +47,26 @@ which will be used to a better effect in later examples."
             (>! c 1)))))
   c))
 
+;; Here's your decorator pattern for a channel:
+(defn named-fact [name]
+  "Wrap factorializer in a transformer that produces a string about the factorial"
+  (let [c (chan)
+        fact (factorializer)]
+    (go
+      (while true
+        (let [n (<! c)]
+          (>! fact n)
+          (>! c (str name " says: factorial of " n " is " (<! fact))))))
+    c))
+    
 (defn run-factorializer [name]
   "Print out 20 factorials"
-  (let [factorializer (factorializer)]
+  (let [factorializer (named-fact name)]
     (go
-      (dotimes [i 20]
+      (dotimes [_ 20]
         (let [n (int (rand 20))]
           (>! factorializer n)
-          (println name i "says: factorial of" n "is" (<! factorializer))))))
+          (println (<! factorializer))))))
   nil)
 
 (defn test-factorializer []
