@@ -16,6 +16,13 @@
             (>! c (str val " done")))))
     c))
 
+;; This function prints ten outputs from the service, as expected:
+(defn test-service []
+  (let [c (service)]
+    (go (dotimes [i 10]
+          (>! c i)
+          (println (<! c)))))
+  nil)
 
 ;; On the console I see messages coming from c
 ;; that have not been modified by the service;
@@ -37,3 +44,21 @@
           (>! b (str "b " i)))))
   
   nil)
+
+;; This version has the same problems as test-fan-in,
+;; and additionally doesn't even print out twenty lines!
+(defn test-fan-in-2 []
+  (let [a (service)
+        b (service)
+        c (fan-in [a b])]
+    
+    (go (dotimes [i 10]
+          (>! a (str "a " i))
+          (println "c: " (<! c))))
+    
+    (go (dotimes [i 10]
+          (>! b (str "b " i)))
+          (println "c: " (<! c))))
+  
+  nil)
+
