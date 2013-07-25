@@ -108,6 +108,12 @@ Whenever either input has something ready, send it on."
 ;; 4.3 DATA REPRESENTATION: SMALL SET OF INTEGERS
 ;; 4.4 SCANNING A SET
 
+(defmacro found? [n content]
+  `(loop [i# 0]
+     (when (and (< i# (count ~content)) (not= (nth ~content i#) ~n))
+       (recur (inc i#)))
+     (< i# (count ~content))))
+
 (defn myset []
   "Implement a set as a process using only array-like methods"
   (let [in (chan)
@@ -119,17 +125,12 @@ Whenever either input has something ready, send it on."
           (condp = command
             ;; :has? n - reply true if n is in the set, false otherwise
             :has? (do
-                   (loop [i 0]
-                     (if (and (< i (count content)) (not= (nth content i) n))
-                       (recur (inc i))
-                       (>! out (< i (count content)))))
-                   (recur content))
+                    (>! out (found? n content))
+                    (recur content))
             ;; :insert n - insert n into the set
-            :insert (let [found (loop [i 0]
-                                  (when (and (< i (count content)) (not= (nth content i) n))
-                                    (recur (inc i)))
-                                  (< i (count content)))]
-                      (recur (if found content (conj content n))))
+            :insert (recur (if (found? n content)
+                             content
+                             (conj content n)))
             ;; :scan - reply :next with each member of the set in turn, and finally :noneleft
             :scan (do
                     (loop [i 0]
