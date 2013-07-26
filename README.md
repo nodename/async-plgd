@@ -35,6 +35,8 @@ or
 
 and run any of the test functions in the corresponding .clj file.
 
+But mainly, read the source.
+
 ## License
 
 Copyright © 2013 Alan Shaw
