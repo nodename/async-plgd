@@ -175,37 +175,35 @@ Whenever either input has something ready, send it on."
 ;; The "iterative list of processes" is used.
 ;; The set will be sorted, i.e. the ith process will contain the ith smallest number.
 
-;; The appropriate process will respond to the :has command
-;; by responding directly to the user process via the single provided out channel.
+;; The appropriate process will respond to the :has? command
+;; directly to the user process via the single provided out channel.
 
 ;; Many insertion operations can proceed concurrently,
 ;; yet any subsequent :has operation will be performed correctly.
 
-(defn r-set [out]
+(defn r-set [set-out]
   (let [in (chan)]
     (go
       (while true
         (let [[command n] (<! in)]
           (condp = command
-            :has? (do
-                    (>! out false)
-                    (recur))
-            :insert (let [child (r-set out)]
+            :has? (>! set-out false)
+            :insert (let [child-in (r-set set-out)]
                       (loop [content n]
                         (let [[command m] (<! in)]
                           (condp = command
                             :has? (do
                                     (if (<= m content)
-                                      (>! out (= m content))
-                                      (>! child [:has? m]))
+                                      (>! set-out (= m content))
+                                      (>! child-in [:has? m]))
                                     (recur content))
                             :insert (cond
                                       (< m content) (do
-                                                      (>! child [:insert content])
+                                                      (>! child-in [:insert content])
                                                       (recur m))
                                       (= m content) (recur content)
                                       (> m content) (do
-                                                      (>! child [:insert m])
+                                                      (>! child-in [:insert m])
                                                       (recur content)))))))))))
     in))
 
@@ -238,4 +236,86 @@ Whenever either input has something ready, send it on."
       
       (println (<! set-out))))
   
+  nil)
+
+;; 4.6 MULTIPLE EXITS: REMOVE LEAST MEMBER
+
+;; Extend the above solution to respond to a command
+;; to remove the smallest member of the set.
+
+(defn l-set
+  ([set-out]
+    (l-set set-out set-out))
+  ([set-out parent]
+    (let [in (chan)]
+      (go
+        (while true
+          (let [[command n] (<! in)]
+            (condp = command
+              :has? (>! set-out false)
+              :least (>! parent :noneleft)
+              :insert (let [child-out (chan)
+                            child-in (l-set set-out child-out)]
+                        (loop [content n]
+                          (let [[[command m]] (alts! [in parent])]
+                            (condp = command
+                              :has? (do
+                                      (if (<= m content)
+                                        (>! set-out (= m content))
+                                        (>! child-in [:has? m]))
+                                      (recur content))
+                              :least (do
+                                       (>! parent content)
+                                       (>! child-in [:least])
+                                       (let [response (<! child-out)]
+                                         (condp = response
+                                           :noneleft :back-to-empty-state
+                                           (recur response))))
+                              :insert (cond
+                                        (< m content) (do
+                                                        (>! child-in [:insert content])
+                                                        (recur m))
+                                        (= m content) (recur content)
+                                        (> m content) (do
+                                                        (>! child-in [:insert m])
+                                                        (recur content)))))))))))
+      in)))
+
+(defn test-l-set []
+  (let [set-out (chan)
+        set-in (l-set set-out)]
+    (go
+      (println [:has? 4])
+      (>! set-in [:has? 4])
+      
+      (println (<! set-out))
+      
+      (println [:insert 4])
+      (>! set-in [:insert 4])
+      
+      (println [:insert 4])
+      (>! set-in [:insert 4])
+      
+      (println [:has? 4])
+      (>! set-in [:has? 4])
+      
+      (println (<! set-out))
+      
+      (println [:insert 3])
+      (>! set-in [:insert 3])
+      
+      (println [:has? 3])
+      (>! set-in [:has? 3])
+      
+      (println (<! set-out))
+      
+      (loop []
+        (println [:least])
+        (>! set-in [:least])
+        (let [response (<! set-out)]
+          (println response)
+          (condp = response
+            :noneleft :finished
+            (recur))))))
+          
   nil)
