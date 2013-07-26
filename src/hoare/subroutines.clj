@@ -106,6 +106,7 @@ Whenever either input has something ready, send it on."
   nil)
 
 ;; 4.3 DATA REPRESENTATION: SMALL SET OF INTEGERS
+;; actually our Clojure version can be large and can contain anything
 ;; 4.4 SCANNING A SET
 
 (defmacro found? [n content]
@@ -171,6 +172,70 @@ Whenever either input has something ready, send it on."
 
 ;; 4.5 RECURSIVE DATA REPRESENTATION: SMALL SET OF INTEGERS
 
+;; The "iterative list of processes" is used.
+;; The set will be sorted, i.e. the ith process will contain the ith smallest number.
 
-            
-                                     
+;; The appropriate process will respond to the :has command
+;; by responding directly to the user process via the single provided out channel.
+
+;; Many insertion operations can proceed concurrently,
+;; yet any subsequent :has operation will be performed correctly.
+
+(defn r-set [out]
+  (let [in (chan)]
+    (go
+      (while true
+        (let [[command n] (<! in)]
+          (condp = command
+            :has? (do
+                    (>! out false)
+                    (recur))
+            :insert (let [child (r-set out)]
+                      (loop [content n]
+                        (let [[command m] (<! in)]
+                          (condp = command
+                            :has? (do
+                                    (if (<= m content)
+                                      (>! out (= m content))
+                                      (>! child [:has? m]))
+                                    (recur content))
+                            :insert (cond
+                                      (< m content) (do
+                                                      (>! child [:insert content])
+                                                      (recur m))
+                                      (= m content) (recur content)
+                                      (> m content) (do
+                                                      (>! child [:insert m])
+                                                      (recur content)))))))))))
+    in))
+
+
+(defn test-r-set []
+  (let [set-out (chan)
+        set-in (r-set set-out)]
+    (go
+      (println [:has? 4])
+      (>! set-in [:has? 4])
+      
+      (println (<! set-out))
+      
+      (println [:insert 4])
+      (>! set-in [:insert 4])
+      
+      (println [:insert 4])
+      (>! set-in [:insert 4])
+      
+      (println [:has? 4])
+      (>! set-in [:has? 4])
+      
+      (println (<! set-out))
+      
+      (println [:insert 3])
+      (>! set-in [:insert 3])
+      
+      (println [:has? 3])
+      (>! set-in [:has? 3])
+      
+      (println (<! set-out))))
+  
+  nil)
