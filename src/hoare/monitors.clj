@@ -3,30 +3,19 @@
 
 ;; 5.1 BOUNDED BUFFER
 
-(defmacro do-command [consumer-request producer consumer-in buf]
-  `(let [[value source] (alts! [~consumer-request ~producer])]
-     (condp = source
-       ~consumer-request (do
-                          (>! ~consumer-in (first ~buf))
-                          (recur (vec (rest ~buf))))
-       ~producer (recur (conj ~buf value)))))
-
 (defn bounded-buffer
   [producer consumer-request consumer-in bufsize]
   (go (loop [buf []]
-        (condp = (count buf)
-          bufsize (do
-                    (<! consumer-request)
-                    (>! consumer-in (first buf))
-                    (recur (vec (rest buf))))
-          0 (recur (conj buf (<! producer)))
-          (do-command consumer-request producer consumer-in buf))))
-  ;        (let [[value source] (alts! [consumer-request producer])]
-  ;          (condp = source
-  ;            consumer-request (do
-  ;                               (>! consumer-in (first buf))
-   ;                              (recur (vec (rest buf))))
-   ;           producer (recur (conj buf value)))))))
+        (let [alts (condp = (count buf)
+                     bufsize [consumer-request]
+                     0 [producer]
+                     [consumer-request producer])
+              [value source] (alts! alts)]
+          (condp = source
+            consumer-request (do
+                               (>! consumer-in (first buf))
+                               (recur (vec (rest buf))))
+            producer (recur (conj buf value))))))
                 
     nil)
 
