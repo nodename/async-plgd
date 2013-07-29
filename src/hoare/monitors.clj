@@ -50,8 +50,9 @@
 
 ;; Here we find a case where using just a single channel is fully justified:
 ;; the semaphore has no way to determine what the corresponding response channel
-;; would be. We have strict alternation, and we avoid deadlock in the client
-;; by introducing a second level of asynchrony.
+;; would be, nor indeed does it use any knowledge of the identity of the requester.
+;; We have strict alternation in the :P request and its :ok response,
+;; and we avoid deadlock in the client by introducing a second level of asynchrony.
 
 (defn semaphore [users resources]
   (go (loop [available resources
@@ -65,36 +66,110 @@
                  "requested" requested "acquired" acquired "released" released)
         (let [[command user] (alts! users)]
               (condp = command
-                ;; :V means a user is releasing a resource
-                :V (if (> (count waiting) 0)
-                    (do
-                      (>! (first waiting) :ok)
-                      (recur available (rest waiting)
-                             requested (inc acquired) (inc released)))
-                    (recur (inc available) waiting
-                           requested acquired (inc released)))
-                ;; :P means a user is requesting a resource
+                ;; :P means a user is requesting access to a resource
                 :P (if (= available 0)
                      (recur available (conj waiting user)
                             (inc requested) acquired released)
                      (do
                        (>! user :ok)
                        (recur (dec available) waiting
-                              (inc requested) (inc acquired) released))))))))
+                              (inc requested) (inc acquired) released)))
+                ;; :V means a user has released a resource
+                :V (if (> (count waiting) 0)
+                    (do
+                      (>! (first waiting) :ok)
+                      (recur available (rest waiting)
+                             requested (inc acquired) (inc released)))
+                    (recur (inc available) waiting
+                           requested acquired (inc released))))))))
 
 (defn test-semaphore []
   (let [users (repeatedly 100 chan)
         resources 10]
     (semaphore users resources)
     
-    (doseq [channel users]
+    (doseq [user users]
       (go
-        (>! channel :P)
+        (>! user :P)
         ;; we may have to wait for an :ok for our :P request;
         ;; do it asynchronously by launching another goroutine:
         (go
-          (<! channel)
-          (>! channel :V)))))
+          (<! user)
+          (do '(some work that acquires, uses, and releases the resource))
+          (>! user :V)))))
   
   nil)
+
+;; 5.3 DINING PHILOSOPHERS
+
+(defn room [philosophers]
+  (go (loop [occupants 0]
+        (println "in room:" occupants)
+        (let [[command] (alts! philosophers)]
+          (condp = command
+            :enter (recur (inc occupants))
+            :exit (recur (dec occupants)))))))
+
+(defn fork [left-philosopher right-philosopher]
+  (go (loop [holder :none]
+        (let [alts (condp = holder
+                     :none [left-philosopher right-philosopher]
+                     left-philosopher [left-philosopher]
+                     right-philosopher [right-philosopher])
+              [command philosopher] (alts! alts)]
+          (condp = command
+            :pickup (condp = holder
+                      :none (recur philosopher)
+                      (println "Fork error: already being held"))
+            :putdown (condp = holder
+                       philosopher (recur :none)
+                       (println "Fork error: you can't put me down")))))))
+
+(defn philosopher []
+  (let [start (chan)
+        room (chan)
+        left-fork (chan)
+        right-fork (chan)]
+    (go
+      (let [name (<! start)]
+        (while true
+          (<! (timeout (long (rand 6000)))) ; (THINK)
+          (>! room :enter)
+          (>! left-fork :pickup)
+          (>! right-fork :pickup)
+          (println name :eating)
+          (<! (timeout (long (rand 12000)))) ; (EAT)
+          (println name :done :eating)
+          (>! left-fork :putdown)
+          (>! right-fork :putdown)
+          (>! room :exit))))
+    {:start start :room room :left-fork left-fork :right-fork right-fork}))
+
+(defn dining-philosophers []
+  (let [phils (vec (repeatedly 5 philosopher))
+        phil0 (phils 0)
+        phil1 (phils 1)
+        phil2 (phils 2)
+        phil3 (phils 3)
+        phil4 (phils 4)]
+    
+    (fork (phil4 :right-fork) (phil0 :left-fork))
+    (fork (phil0 :right-fork) (phil1 :left-fork))
+    (fork (phil1 :right-fork) (phil2 :left-fork))
+    (fork (phil2 :right-fork) (phil3 :left-fork))
+    (fork (phil3 :right-fork) (phil4 :left-fork))
+    
+    (room (map :room phils))
+    
+    (>!! (phil0 :start) 0)
+    (>!! (phil1 :start) 1)
+    (>!! (phil2 :start) 2)
+    (>!! (phil3 :start) 3)
+    (>!! (phil4 :start) 4))
+  
+  nil)
+    
+                           
+        
+  
     

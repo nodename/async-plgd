@@ -15,6 +15,10 @@ section 3 of the paper, "Coroutines"
 
 section 4 of the paper, "Subroutines"
 
+#### monitors.clj:
+
+section 5 of the paper, "Monitors and Scheduling"
+
 ## Usage
 
 Clone the [core.async](http://github.com/clojure/core.async) repo to a
@@ -32,10 +36,15 @@ or
 ```
 (use 'hoare.subroutines)
 ```
+or
+
+```
+(use 'hoare.monitors)
+```
 
 and run any of the test functions in the corresponding .clj file.
 
-But mainly, read the source.
+But mainly, read the source. Comments, corrections, criticisms are welcome.
 
 ## License
 
