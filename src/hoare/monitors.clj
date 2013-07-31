@@ -100,15 +100,34 @@
   
   nil)
 
-;; 5.3 DINING PHILOSOPHERS
+;; 5.3 DIJKSTRA'S DINING PHILOSOPHERS
+
+;; Five philosophers spen their lives thinking and eating.
+;; The philosophers share a common dining room where
+;; there is a circular table surrounded by five chairs,
+;; each belonging to one philosopher.
+;; In the center of the table there is a large bowl of spaghetti,
+;; and the table is laid with five forks.
+;; On feeling hungry, a philosopher enters the dining room, sits
+;; in his own chair, and picks up the fork on the left of his place.
+;; Unfortunately, the spaghetti is so tangled that he needs to
+;; pick up and use the fork on his right as well.
+;; When he has finished, he puts down both forks, and leaves the room.
 
 (defn room [philosophers]
-  (go (loop [occupants 0]
-        (println "in room:" occupants)
-        (let [[command] (alts! philosophers)]
+  (go (loop [occupants #{}]
+        (println "in room:" (count occupants) "philosophers")
+        (let [alts (cond
+                     ;; do not allow all 5 philosophers in the room at once,
+                     ;; to avoid the possibility that each one will
+                     ;; pick up his left fork and starve to death
+                     ;; because he cannot pick up his right fork:
+                     (= (count occupants) 4) (vec occupants)
+                     :else philosophers)
+              [command philosopher] (alts! alts)]
           (condp = command
-            :enter (recur (inc occupants))
-            :exit (recur (dec occupants)))))))
+            :enter (recur (conj occupants philosopher))
+            :exit (recur (disj occupants philosopher)))))))
 
 (defn fork [left-philosopher right-philosopher]
   (go (loop [holder :none]
@@ -137,9 +156,9 @@
           (>! room :enter)
           (>! left-fork :pickup)
           (>! right-fork :pickup)
-          (println name :eating)
+          (println name 'eating)
           (<! (timeout (long (rand 12000)))) ; (EAT)
-          (println name :done :eating)
+          (println name 'done 'eating)
           (>! left-fork :putdown)
           (>! right-fork :putdown)
           (>! room :exit))))
