@@ -19,6 +19,10 @@ section 4 of the paper, "Subroutines"
 
 section 5 of the paper, "Monitors and Scheduling"
 
+#### misc.clj:
+
+section 6 of the paper, "Miscellaneous"
+
 ## Usage
 
 Clone the [core.async](http://github.com/clojure/core.async) repo to a
@@ -40,6 +44,11 @@ or
 
 ```
 (use 'hoare.monitors)
+```
+or
+
+```
+(use 'hoare.misc)
 ```
 
 and run any of the test functions in the corresponding .clj file.
