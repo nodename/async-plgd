@@ -102,7 +102,7 @@
 
 ;; 5.3 DIJKSTRA'S DINING PHILOSOPHERS
 
-;; Five philosophers spen their lives thinking and eating.
+;; Five philosophers spend their lives thinking and eating.
 ;; The philosophers share a common dining room where
 ;; there is a circular table surrounded by five chairs,
 ;; each belonging to one philosopher.
