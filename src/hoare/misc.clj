@@ -86,29 +86,35 @@
 (defn make-process-node [A north west]
   (center A (north :south) (west :east)))
 
+(defn add-process [row A north]
+  (let [current-node (make-process-node (first A) (first north) (last row))]
+    (conj row current-node)))
+
 (defn make-process-row [A north west]
   "A and north seqs; west a single channel"
   (loop [row [west]
          A A
          north north]
-    (if (> (count A) 0)
-      (let [current-node (make-process-node (first A) (first north) (last row))]
-        (recur (conj row current-node)
-               (rest A)
-               (rest north)))
-      (rest row))))
+    (if (= (count A) 0)
+      (rest row)
+      (recur (add-process row A north)
+             (rest A)
+             (rest north)))))
+
+(defn add-row [matrix A west]
+  (let [current-row (make-process-row (first A) (last matrix) (first west))]
+    (conj matrix current-row)))
 
 (defn make-process-matrix [A north west]
   "A a square matrix, north and west seqs"
   (loop [matrix [north]
          A A
          west west]
-    (if (> (count A) 0)
-      (let [current-row (make-process-row (first A) (last matrix) (first west))]
-        (recur (conj matrix current-row)
-               (rest A)
-               (rest west)))
-      (rest matrix))))
+    (if (= (count A) 0)
+      (rest matrix)
+      (recur (add-row matrix A west)
+             (rest A)
+             (rest west)))))
 
 (defn multiplier [IN A]
   (let [west (map make-west IN)
