@@ -56,6 +56,13 @@
   (go (while true
         (alts! channels))))
 
+(defn vec-printer [channels]
+  (go (loop [output (vec (take (count channels) (repeat nil)))]
+        (println output)
+     ;   (<! (timeout 1000))
+        (let [[value source] (alts! channels)]
+          (recur (assoc output (.indexOf channels source) value))))))
+
 (defn center [A north west]
   (let [[south east] (repeatedly 2 chan)]
     (go (loop [x 0
@@ -70,13 +77,6 @@
                      (recur value sum))))))
     {:south south :east east}))
 
-(defn vec-printer [channels]
-  (go (loop [output (vec (take (count channels) (repeat nil)))]
-        (println output)
-     ;   (<! (timeout 1000))
-        (let [[value source] (alts! channels)]
-          (recur (assoc output (.indexOf channels source) value))))))
-
 (defn make-north []
   {:south (constant-chan 0)})
 
@@ -86,39 +86,39 @@
 (defn make-process-node [A north west]
   (center A (north :south) (west :east)))
 
-(defn add-process [row A north]
-  (let [current-node (make-process-node (first A) (first north) (last row))]
-    (conj row current-node)))
+(defn add-process-node [row A north]
+  (let [process-node (make-process-node (first A) (first north) (last row))]
+    (conj row process-node)))
 
 (defn make-process-row [A north west]
   "A and north seqs; west a single channel"
   (loop [row [west]
          A A
          north north]
-    (if (= (count A) 0)
+    (if (zero? (count A))
       (rest row)
-      (recur (add-process row A north)
+      (recur (add-process-node row A north)
              (rest A)
              (rest north)))))
 
-(defn add-row [matrix A west]
-  (let [current-row (make-process-row (first A) (last matrix) (first west))]
-    (conj matrix current-row)))
+(defn add-process-row [matrix A west]
+  (let [process-row (make-process-row (first A) (last matrix) (first west))]
+    (conj matrix process-row)))
 
 (defn make-process-matrix [A north west]
   "A a square matrix, north and west seqs"
   (loop [matrix [north]
          A A
          west west]
-    (if (= (count A) 0)
+    (if (zero? (count A))
       (rest matrix)
-      (recur (add-row matrix A west)
+      (recur (add-process-row matrix A west)
              (rest A)
              (rest west)))))
 
 (defn multiplier [IN A]
-  (let [west (map make-west IN)
-        north (repeatedly (count IN) make-north)
+  (let [north (repeatedly (count IN) make-north)
+        west (map make-west IN)
         process-matrix (make-process-matrix A north west)]
     
     (sink (map #(% :east) (map last process-matrix)))
