@@ -87,32 +87,32 @@
   (center A (north :south) (west :east)))
 
 (defn make-process-row [A north west]
-  "A and north vectors; west a single channel"
-  (let [first-node (make-process-node (A 0) (north 0) west)]
-    (loop [row [first-node]
-           index 1]
-      (if (< index (count A))
-        (let [current-node (make-process-node (A index) (north index) (last row))]
-          (recur (conj row current-node)
-                 (inc index)))
-        row))))
+  "A and north seqs; west a single channel"
+  (loop [row [west]
+         A A
+         north north]
+    (if (> (count A) 0)
+      (let [current-node (make-process-node (first A) (first north) (last row))]
+        (recur (conj row current-node)
+               (rest A)
+               (rest north)))
+      (rest row))))
 
 (defn make-process-matrix [A north west]
-  "A a square matrix, north and west vectors"
-  (let [first-row (make-process-row (A 0) north (west 0))]
-    (loop [matrix [first-row]
-           index 1]
-      (if (< index (count A))
-        (let [current-row (make-process-row (A index) (last matrix) (west index))]
-          (recur (conj matrix current-row)
-                 (inc index)))
-        matrix))))
-                            
-      
+  "A a square matrix, north and west seqs"
+  (loop [matrix [north]
+         A A
+         west west]
+    (if (> (count A) 0)
+      (let [current-row (make-process-row (first A) (last matrix) (first west))]
+        (recur (conj matrix current-row)
+               (rest A)
+               (rest west)))
+      (rest matrix))))
 
 (defn multiplier [IN A]
-  (let [west (vec (map make-west IN))
-        north (vec (repeatedly (count IN) make-north))
+  (let [west (map make-west IN)
+        north (repeatedly (count IN) make-north)
         process-matrix (make-process-matrix A north west)]
     
     (sink (map #(% :east) (map last process-matrix)))
