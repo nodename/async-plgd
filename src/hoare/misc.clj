@@ -46,24 +46,51 @@
 
 ;; 6.2 AN ITERATIVE ARRAY: MATRIX MULTIPLICATION
 
+;; Problem: A square matrix A of order n is given.
+;; n streams are to be input, each stream representing
+;; a column of an array IN.
+;; n streams are to be output, each representing
+;; a column of the product matrix IN x A.
+;; After an initial delay, the results are to be produced
+;; at the same rate as the input is consumed.
+;; Consequently, a high degree of concurrency is required.
+
 (defn constant-chan [val]
+  "A channel that constantly emits val"
   (let [out (chan)]
     (go (while true
           (>! out val)))
     out))
 
 (defn sink [channels]
+  "Swallow output from channels"
   (go (while true
         (alts! channels))))
 
-(defn vec-printer [channels]
-  (go (loop [output (vec (take (count channels) (repeat nil)))]
-        (println output)
-     ;   (<! (timeout 1000))
-        (let [[value source] (alts! channels)]
-          (recur (assoc output (.indexOf channels source) value))))))
+(defn vec-chan [ins]
+  "A channel that always emits a vector of the most recent outputs of ins"
+  (let [out (chan)]
+  (go (loop [output (vec (take (count ins) (repeat nil)))]
+        (>! out output)
+        (let [[value source] (alts! ins)]
+          (recur (assoc output (.indexOf ins source) value)))))
+  out))
 
-(defn center [A north west]
+(defn vec-print [channels]
+  "Print vec-chan of channels.
+Note that this function runs in the main thread."
+  (let [vec-out (vec-chan channels)
+        printer-in (printer)]
+    (while true
+      (>!! printer-in (<!! vec-out)))))
+
+;; A processor is assigned to each element in the input matrix.
+;; Each of these nXn processors inputs a vector component
+;; from the west and a partial sum from the north.
+;; Each node outputs the vector component to its east,
+;; and an updated partial sum to the south.
+
+(defn processor [A north west]
   (let [[south east] (repeatedly 2 chan)]
     (go (loop [x 0
                sum 0]
@@ -77,57 +104,65 @@
                      (recur value sum))))))
     {:south south :east east}))
 
-(defn make-north []
-  {:south (constant-chan 0)})
+(defn make-processor-node [A north west]
+  (processor A (north :south) (west :east)))
 
-(defn make-west [c]
-  {:east c})
+(defn append-processor-node [processor-row A north]
+  (let [processor-node (make-processor-node (first A) (first north) (last processor-row))]
+    (conj processor-row processor-node)))
 
-(defn make-process-node [A north west]
-  (center A (north :south) (west :east)))
-
-(defn add-process-node [row A north]
-  (let [process-node (make-process-node (first A) (first north) (last row))]
-    (conj row process-node)))
-
-(defn make-process-row [A north west]
-  "A and north seqs; west a single channel"
+(defn make-processor-row [A north west]
+  ;; A and north seqs; west a single channel
   (loop [row [west]
          A A
          north north]
     (if (zero? (count A))
       (rest row)
-      (recur (add-process-node row A north)
+      (recur (append-processor-node row A north)
              (rest A)
              (rest north)))))
 
-(defn add-process-row [matrix A west]
-  (let [process-row (make-process-row (first A) (last matrix) (first west))]
-    (conj matrix process-row)))
+(defn append-processor-row [processor-matrix A west]
+  (let [processor-row (make-processor-row (first A) (last processor-matrix) (first west))]
+    (conj processor-matrix processor-row)))
 
-(defn make-process-matrix [A north west]
-  "A a square matrix, north and west seqs"
+(defn make-processor-matrix [A north west]
+  ;; A a square matrix, north and west seqs
   (loop [matrix [north]
          A A
          west west]
     (if (zero? (count A))
       (rest matrix)
-      (recur (add-process-row matrix A west)
+      (recur (append-processor-row matrix A west)
              (rest A)
              (rest west)))))
 
-(defn multiplier [IN A]
-  (let [north (repeatedly (count IN) make-north)
-        west (map make-west IN)
-        process-matrix (make-process-matrix A north west)]
+(defn matrix-multiplier [IN A]
+  (let [;; The north border is a constant source of zeroes:
+        north (repeatedly (count IN) (fn [] {:south (constant-chan 0)}))
+        
+        ;; The input data is produced by the west border nodes:
+        west (map (fn [c] {:east c}) IN)
+        
+        processor-matrix (make-processor-matrix A north west)]
     
-    (sink (map #(% :east) (map last process-matrix)))
-    (vec-printer (map #(% :south) (last process-matrix))))
+    ;; The east border is just a sink:
+    (sink (map #(% :east) (map last processor-matrix)))
+    
+    ;; The desired results are consumed by south border nodes:
+    (vec-print (map #(% :south) (last processor-matrix))))
   
   nil)
     
 (defn test-multiplier []
-  (multiplier [(constant-chan 3) (constant-chan 2) (constant-chan 1)] [[1 2 3] [3 2 5] [10 0 1]]))
+  "After a short delay of (how many?) outputs, repeatedly print [24 10 35 40 65]"
+  (matrix-multiplier
+    (map constant-chan [3 2 1 0 5])
+    [[1 2 3 4 5]
+     [3 2 5 8 4]
+     [10 0 1 2 2]
+     [5 3 6 4 7]
+     [1 0 3 2 8]]))
                                           
            
       
