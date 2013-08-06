@@ -132,6 +132,8 @@
 (defn fork [left-philosopher right-philosopher]
   (go (loop [holder :none]
         (let [alts (condp = holder
+                     ;; If I'm being held, accept commands only from the holder,
+                     ;; otherwise from either philosopher:
                      :none [left-philosopher right-philosopher]
                      left-philosopher [left-philosopher]
                      right-philosopher [right-philosopher])
