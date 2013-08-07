@@ -3,7 +3,7 @@
 ### hoare:
 
 Examples corresponding to those in C.A.R. Hoare,
-"Communicating Sequential Processes" (CACM 21:8 August 1978).
+["Communicating Sequential Processes"](http://www.cs.virginia.edu/crab/hoare1978csp.pdf) (CACM 21:8 August 1978).
 This paper is the precursor to his book of the same title,
 which can be obtained at http://www.usingcsp.com/
 
