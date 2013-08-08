@@ -33,11 +33,12 @@
 
 ;; 4.2 RECURSION: FACTORIAL
 
-(defn factorializer []
+(defn factorializer
   "Compute a factorial by the recursive method.
 ...
 Note: This unrealistic example introduces the technique of the 'iterative list of processes'
 which will be used to a better effect in later examples."
+  []
   (let [in (chan)
         out (chan)]
     (go
@@ -50,8 +51,9 @@ which will be used to a better effect in later examples."
             (>! out 1)))))
   [in out]))
 
-(defn named-fact [name]
+(defn named-fact
   "Wrap factorializer in a transformer that produces a string about the factorial"
+  [name]
   (let [in (chan)
         out (chan)
         [f-in f-out] (factorializer)]
@@ -61,9 +63,10 @@ which will be used to a better effect in later examples."
           (>! f-in n)
           (>! out (str name " says: factorial of " n " is " (<! f-out))))))
     [in out]))
-    
-(defn run-factorializer [name]
+
+(defn run-factorializer
   "Print out 10 factorials"
+  [name]
   (let [[f-in f-out] (named-fact name)]
     (go
       (dotimes [i 10]
@@ -72,8 +75,9 @@ which will be used to a better effect in later examples."
           (println i (<! f-out))))))
   nil)
 
-(defn test-factorializer []
+(defn test-factorializer
   "Print out ten factorials for a and ten for b concurrently"
+  []
   (run-factorializer 'a)
   (run-factorializer 'b))
 
@@ -93,16 +97,16 @@ Whenever either input has something ready, send it on."
   (let [[a-in a-out] (named-fact 'a)
         [b-in b-out] (named-fact 'b)
         c (fan-in [a-out b-out])]
-    
+
     (go (while true
           (println (<! c))))
-    
+
     (go (dotimes [i 10]
           (>! a-in i)))
-    
+
     (go (dotimes [i 10]
           (>! b-in i))))
-  
+
   nil)
 
 ;; 4.3 DATA REPRESENTATION: SMALL SET OF INTEGERS
@@ -115,8 +119,9 @@ Whenever either input has something ready, send it on."
        (recur (inc i#)))
      (< i# (count ~content))))
 
-(defn myset []
+(defn myset
   "Implement a set as a process using only array-like methods"
+  []
   (let [in (chan)
         out (chan)]
     (go
@@ -143,8 +148,9 @@ Whenever either input has something ready, send it on."
                     (recur content))))))
     [in out]))
 
-(defmacro scan-set [f set-in set-out]
+(defmacro scan-set
   "Invoke f on each element of the set"
+  [f set-in set-out]
   `(do
      (>! ~set-in [:scan])
      (loop []
@@ -214,28 +220,28 @@ Whenever either input has something ready, send it on."
     (go
       (println [:has? 4])
       (>! set-in [:has? 4])
-      
+
       (println (<! set-out))
-      
+
       (println [:insert 4])
       (>! set-in [:insert 4])
-      
+
       (println [:insert 4])
       (>! set-in [:insert 4])
-      
+
       (println [:has? 4])
       (>! set-in [:has? 4])
-      
+
       (println (<! set-out))
-      
+
       (println [:insert 3])
       (>! set-in [:insert 3])
-      
+
       (println [:has? 3])
       (>! set-in [:has? 3])
-      
+
       (println (<! set-out))))
-  
+
   nil)
 
 ;; 4.6 MULTIPLE EXITS: REMOVE LEAST MEMBER
@@ -287,28 +293,28 @@ Whenever either input has something ready, send it on."
     (go
       (println [:has? 4])
       (>! set-in [:has? 4])
-      
+
       (println (<! set-out))
-      
+
       (println [:insert 4])
       (>! set-in [:insert 4])
-      
+
       (println [:insert 4])
       (>! set-in [:insert 4])
-      
+
       (println [:has? 4])
       (>! set-in [:has? 4])
-      
+
       (println (<! set-out))
-      
+
       (println [:insert 3])
       (>! set-in [:insert 3])
-      
+
       (println [:has? 3])
       (>! set-in [:has? 3])
-      
+
       (println (<! set-out))
-      
+
       (loop []
         (println [:least])
         (>! set-in [:least])
@@ -317,5 +323,5 @@ Whenever either input has something ready, send it on."
           (condp = response
             :noneleft :finished
             (recur))))))
-          
+
   nil)

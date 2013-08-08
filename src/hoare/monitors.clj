@@ -19,27 +19,27 @@
                                (>! consumer (first buf))
                                (recur (vec (rest buf))))
             producer (recur (conj buf value))))))
-                
+
     nil)
 
 (defn test-buffer []
   (let [producer (chan)
         [consumer consumer-request] [(chan) (chan)]
         rand-interval #(long (rand 2000))]
-    
+
     (bounded-buffer producer consumer-request consumer 10)
-        
+
     (go (while true
           (let [interval (rand-interval)]
             (<! (timeout interval))
             (>! consumer-request :ready)
             (println (<! consumer)))))
-    
+
     (go (dotimes [i 20]
           (let [interval (rand-interval)]
             (<! (timeout interval))
             (>! producer i))))
-  
+
   nil))
 
 ;; 5.2 INTEGER SEMAPHORE
@@ -87,7 +87,7 @@
   (let [users (repeatedly 100 chan)
         resources 10]
     (semaphore users resources)
-    
+
     (doseq [user users]
       (go
         (>! user :P)
@@ -97,7 +97,7 @@
           (<! user)
           (do '(some work that acquires, uses, and releases the resource))
           (>! user :V)))))
-  
+
   nil)
 
 ;; 5.3 DIJKSTRA'S DINING PHILOSOPHERS
@@ -173,24 +173,24 @@
         phil2 (phils 2)
         phil3 (phils 3)
         phil4 (phils 4)]
-    
+
     (fork (phil4 :right-fork) (phil0 :left-fork))
     (fork (phil0 :right-fork) (phil1 :left-fork))
     (fork (phil1 :right-fork) (phil2 :left-fork))
     (fork (phil2 :right-fork) (phil3 :left-fork))
     (fork (phil3 :right-fork) (phil4 :left-fork))
-    
+
     (room (map :room phils))
-    
+
     (>!! (phil0 :start) 0)
     (>!! (phil1 :start) 1)
     (>!! (phil2 :start) 2)
     (>!! (phil3 :start) 3)
     (>!! (phil4 :start) 4))
-  
+
   nil)
-    
-                           
-        
-  
-    
+
+
+
+
+
