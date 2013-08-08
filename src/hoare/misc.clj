@@ -31,8 +31,9 @@
           (println (<! in))))
     in))
 
-(defn eratosthenes [n]
+(defn eratosthenes
   "Print in ascending order all primes less than n"
+  [n]
   (let [printer (printer)
         sieve (sieve printer)]
     (>!! printer 2)
@@ -55,20 +56,23 @@
 ;; at the same rate as the input is consumed.
 ;; Consequently, a high degree of concurrency is required.
 
-(defn constant-chan [val]
+(defn constant-chan
   "A channel that constantly emits val"
+  [val]
   (let [out (chan)]
     (go (while true
           (>! out val)))
     out))
 
-(defn sink [channels]
+(defn sink
   "Swallow output from channels"
+  [channels]
   (go (while true
         (alts! channels))))
 
-(defn vec-chan [ins]
+(defn vec-chan
   "A channel that always emits a vector of the most recent outputs of ins"
+  [ins]
   (let [out (chan)]
   (go (loop [output (vec (take (count ins) (repeat nil)))]
         (>! out output)
@@ -76,9 +80,10 @@
           (recur (assoc output (.indexOf ins source) value)))))
   out))
 
-(defn vec-print [channels]
+(defn vec-print
   "Print vec-chan of channels.
 Note that this function runs in the main thread."
+  [channels]
   (let [vec-out (vec-chan channels)
         printer-in (printer)]
     (while true
@@ -140,22 +145,23 @@ Note that this function runs in the main thread."
 (defn matrix-multiplier [IN A]
   (let [;; The north border is a constant source of zeroes:
         north (repeatedly (count IN) (fn [] {:south (constant-chan 0)}))
-        
+
         ;; The input data is produced by the west border nodes:
         west (map (fn [c] {:east c}) IN)
-        
+
         processor-matrix (make-processor-matrix A north west)]
-    
+
     ;; The east border is just a sink:
     (sink (map #(% :east) (map last processor-matrix)))
-    
+
     ;; The desired results are consumed by south border nodes:
     (vec-print (map #(% :south) (last processor-matrix))))
-  
+
   nil)
-    
-(defn test-multiplier []
+
+(defn test-multiplier
   "After a short delay of (how many?) outputs, repeatedly print [24 10 35 40 65]"
+  []
   (matrix-multiplier
     (map constant-chan [3 2 1 0 5])
     [[1 2 3 4 5]
@@ -163,6 +169,6 @@ Note that this function runs in the main thread."
      [10 0 1 2 2]
      [5 3 6 4 7]
      [1 0 3 2 8]]))
-                                          
-           
-      
+
+
+

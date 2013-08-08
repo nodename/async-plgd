@@ -18,8 +18,9 @@
 ;; thus the channel is a handle on a service.
 ;; We use this pattern throughout the examples.
 
-(defn copier [source]
+(defn copier
   "A process that copies values from the source channel"
+  [source]
   (let [c (chan)]
     (go
       (loop []
@@ -33,15 +34,16 @@
               (recur))))))
     c))
 
-(defn test-copy []
+(defn test-copy
   "Print out all the numbers from 0 to 9,
 then after two seconds print out the numbers from 10 to 19"
+  []
   (let [west (chan)
         ;; this process will remain ready to copy...
         east (copier west)
         ;; a channel that will close after 2000 ms:
         timeout (timeout 2000)]
-    
+
     (go
       (dotimes [i 10]
         (>! west i))
@@ -49,19 +51,20 @@ then after two seconds print out the numbers from 10 to 19"
       (<! timeout)
       (dotimes [i 10]
         (>! west (+ 10 i))))
-    
+
     ;; this process will remain ready to print...
     (go
       (loop []
         (println (<! east))
         (recur))))
-  
+
   ;; until all the processes go away when they go out of scope:
   nil)
 
-(defn test-copy-and-close []
+(defn test-copy-and-close
   "Print out all the numbers from 0 to 9,
 then fail to print out the numbers from 10 to 19"
+  []
   (let [west (chan)
         east (copier west)]
     (go
@@ -70,21 +73,22 @@ then fail to print out the numbers from 10 to 19"
       (close! west)
       (dotimes [i 10]
         (>! west (+ 10 i))))
-    
+
     ;; since west has closed, copier will close east;
     ;; once east has closed, we will forever get nils from it;
     ;; we never see the values put to west after west has closed;
     ;; they never even made it onto west
     (go-times [i 20]
       (println (<! east))))
-  
+
   nil)
 
 ;; 3.2 SQUASH
 
-(defn squasher [source]
+(defn squasher
   "Copy from source channel but replace every pair of consecutive asterisks '**' by an upward arrow '^'.
 Deal sensibly with input which ends with an odd number of asterisks."
+  [source]
   (let [c (chan)]
       (go
         (loop []
@@ -119,8 +123,9 @@ Deal sensibly with input which ends with an odd number of asterisks."
       (when-not (nil? close)
         (close! channel)))))
 
-(defn print-chars<! [channel]
+(defn print-chars<!
   "Dump everything from channel to stdout until channel closes, then print a newline"
+  [channel]
   (go
     (loop []
       (let [value (<! channel)]
@@ -136,13 +141,14 @@ Deal sensibly with input which ends with an odd number of asterisks."
     (let [west (chan)
           east (squasher west)]
       (chars>! west string :close)
-      
+
       (print-chars<! east))
-    
+
     nil)
 
-(defn test-squash []
+(defn test-squash
   "Print out 'here^^there*p^*'"
+  []
   (test-squasher-with "here****there*p***"))
 
 ;; 3.3 DISASSEMBLE
@@ -151,9 +157,10 @@ Deal sensibly with input which ends with an odd number of asterisks."
 (defn cardimage [digit]
   (str digit cardimage-without-first-char))
 
-(defn disassembler [cardfile]
+(defn disassembler
   "Read cards from cardfile and output the stream of characters they contain.
 An extra space should be inserted at the end of each card."
+  [cardfile]
   (let [c (chan)]
     (go
       (loop []
@@ -167,17 +174,18 @@ An extra space should be inserted at the end of each card."
               (recur))))))
   c))
 
-(defn test-disassemble []
+(defn test-disassemble
   "Dump cardimages 0 through 9 to stdout with a space after each"
+  []
   (let [cardfile (chan)
         disassembler (disassembler cardfile)]
     (go-times [i 10]
               (>! cardfile (cardimage i)))
-    
+
     (print-chars<! disassembler))
-  
+
   nil)
-    
+
 ;; 3.4 ASSEMBLE
 
 (defn assembler
@@ -204,15 +212,16 @@ The last line should be completed with spaces (or pad-char, if specified) if nec
                         (recur "")))))))
       lineprinter)))
 
-(defn test-assemble []
+(defn test-assemble
   "Dump cardimages 0 through 9 to stdout in lines of 125 characters.
 Pad the last line with Xs to 125 characters."
+  []
   (let [cardfile (chan)
         lineprinter (assembler \X cardfile)]
     (chars>! cardfile (apply str (for [i (range 10)] (cardimage i))) :close)
     (print-chars<! lineprinter))
   nil)
-    
+
 ;; 3.5 REFORMAT
 
 ;; That GENERATOR pattern totally simplifies the composition of processes!
@@ -243,14 +252,14 @@ This elementary problem is difficult to solve elegantly without coroutines."
 (defn test-reformatter [reformatter]
   (let [cardfile (chan)
         reformatter (reformatter \X cardfile)]
-    
+
     (go
       (dotimes [i 10]
         (>! cardfile (cardimage i)))
       (close! cardfile))
-    
+
     (print-chars<! reformatter))
-  
+
   nil)
 
 (defn test-reformat []
@@ -272,8 +281,9 @@ This elementary problem is difficult to solve elegantly without coroutines."
       squasher
       (assembler pad-char))))
 
-(defn cardimage-with-stars [i]
+(defn cardimage-with-stars
   "Replace one random character in cardimage i with a pair of asterisks"
+  [i]
   (let [cardimage (cardimage i)
         index (int (+ 1 (rand 79)))
         front (.substring cardimage 0 (- index 1))
@@ -283,12 +293,12 @@ This elementary problem is difficult to solve elegantly without coroutines."
 (defn test-conway []
   (let [cardfile (chan)
         conway (conway \X cardfile)]
-    
+
     (go
       (dotimes [i 10]
         (>! cardfile (cardimage-with-stars i)))
       (close! cardfile))
-    
+
     (print-chars<! conway))
-  
+
   nil)
