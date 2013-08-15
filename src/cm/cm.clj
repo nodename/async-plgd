@@ -19,25 +19,6 @@
 (def u-printer (sink))
 (def val-printer (sink))
 
-(comment
-(defn outputter
-  [n]
-  (let [in (chan)]
-    (let [row (fn [] (vec (take n (repeat nil))))
-          matrix (vec (repeatedly n row))
-          elements (* n n)]
-      (loop [e elements
-             m matrix]
-        (let [[i j value] (<! in)]
-          (if (zero? e)
-            (>! u-printer ['FINAL matrix])
-            (recur (dec e) (assoc-in matrix [i j] value))))))
-    in))
-          
-(def output-chan (outputter (* q m)))
-) ;; end comment
-
-
 ;; grid is a qXq matrix of nodes (example: q = 3)
 ;; a node has coordinates qi, qj which range from 1 to q inclusive
 ;; each node has a mXm subgrid (example: m = 2) plus 4m boundary elements
@@ -56,21 +37,17 @@
 
 (defn newgrid-row
   [m initial i0 j0 i]
-  (loop [j 0
-         row []]
-    (if (= j (+ 2 m))
-      row
-      (recur (inc j) (conj row (initial (+ i0 i) (+ j0 j)))))))
+  (let [f (fn [row j]
+            (conj row (initial (+ i0 i) (+ j0 j))))]
+  (reduce f [] (range (+ 2 m)))))
       
 (defn newgrid
   [m initial qi qj]
   (let [i0 (* (dec qi) m)
-        j0 (* (dec qj) m)]
-    (loop [i 0
-           newgrid []]
-      (if (= i (+ 2 m))
-        newgrid
-        (recur (inc i) (conj newgrid (newgrid-row m initial i0 j0 i)))))))
+        j0 (* (dec qj) m)
+        f (fn [grid i]
+            (conj grid (newgrid-row m initial i0 j0 i)))]
+    (reduce f [] (range (+ 2 m)))))
 
 (defn neighbor-element
   [test u i j channel]
@@ -91,18 +68,17 @@
         last (- m b)]
     (go
       (<! in)
-      (>! flow-printer ['exchange-phase1 qi qj 'start])
-    (loop [k (- 2 b)
-           u u]
-      (if (> k last)
-        (>! out u)
-        (let [u0k (<! (neighbor-element (> qi 1) u 0 k north))
-              _ (when (< qi q) (>! south ((u m) k)))
-              _ (when (< qj q) (>! east ((u k) m)))
-              uk0 (<! (neighbor-element (> qj 1) u k 0 west))
-              u (assoc-in u [0 k] u0k)
-              u (assoc-in u [k 0] uk0)]
-          (recur (+ 2 k) u)))))
+      (loop [k (- 2 b)
+             u u]
+        (if (> k last)
+          (>! out u)
+          (let [u0k (<! (neighbor-element (> qi 1) u 0 k north))
+                _ (when (< qi q) (>! south ((u m) k)))
+                _ (when (< qj q) (>! east ((u k) m)))
+                uk0 (<! (neighbor-element (> qj 1) u k 0 west))
+                u (assoc-in u [0 k] u0k)
+                u (assoc-in u [k 0] uk0)]
+            (recur (+ 2 k) u)))))
     {:in in :out out}))
 
 (defn exchange-phase2
@@ -110,18 +86,19 @@
   (let [in (chan)
         out (chan)
         last (dec (+ m b))]
-    (go (<! in)
-    (loop [k (inc b)
-           u u]
-      (if (> k last)
-        (>! out u)
-        (let [_ (when (> qi 1) (>! north ((u 1) k)))
-              um1k (<! (neighbor-element (< qi q) u (inc m) k south))
-              ukm1 (<! (neighbor-element (< qj q) u k (inc m) east))
-              _ (when (> qj 1) (>! west ((u k) 1)))
-              u (assoc-in u [(inc m) k] um1k)
-              u (assoc-in u [k (inc m)] ukm1)]
-          (recur (+ 2 k) u)))))
+    (go
+      (<! in)
+      (loop [k (inc b)
+             u u]
+        (if (> k last)
+          (>! out u)
+          (let [_ (when (> qi 1) (>! north ((u 1) k)))
+                um1k (<! (neighbor-element (< qi q) u (inc m) k south))
+                ukm1 (<! (neighbor-element (< qj q) u k (inc m) east))
+                _ (when (> qj 1) (>! west ((u k) 1)))
+                u (assoc-in u [(inc m) k] um1k)
+                u (assoc-in u [k (inc m)] ukm1)]
+            (recur (+ 2 k) u)))))
     {:in in :out out}))
 
 
@@ -147,18 +124,13 @@
                                 (assoc-in u [i j] nextij)))
         assoc-row-of-next-states-in (fn [u i]
                                       (let [k (mod (+ i b) 2)
-                                            last (- m k)]
-                                        (loop [j (- 2 k)
-                                               u u]
-                                          (if (<= j last)
-                                            (recur (+ j 2) (assoc-next-state-in u i j))
-                                            u))))
+                                            last (- m k)
+                                            f (fn [u j]
+                                                (assoc-next-state-in u i j))]
+                                        (reduce f u (range (- 2 k) (inc last) 2))))
         assoc-next-states-in (fn [u]
-                               (loop [i 1
-                                      u u]
-                                 (if (> i m)
-                                   u
-                                   (recur (inc i) (assoc-row-of-next-states-in u i)))))]
+                               (reduce assoc-row-of-next-states-in u (range 1 (inc m))))]
+        
     (let [in (chan)
           out (chan)]
       (go
@@ -257,10 +229,10 @@ through the interior elements only."
     
     (go (>! p-printer (<! (master (* q m) ((h 0) q)))))
     
-    (doseq [k (drop 1 (range (inc q)))]
+    (doseq [k (range 1 (inc q))]
       (node q m initialize next-state steps k 1 ((v (dec k)) 1) ((v k) 1) ((h k) 1) ((h (dec k)) q)))
     
-    (doseq [i (drop 1 (range (inc q)))
-            j (drop 2 (range (inc q)))]
+    (doseq [i (range 1 (inc q))
+            j (range 2 (inc q))]
       (node q m initialize next-state steps i j ((v (dec i)) j) ((v i) j) ((h i) j) ((h i) (dec j))))))
     
