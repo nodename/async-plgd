@@ -54,9 +54,6 @@
       (zero? j) u4
       :else u5)))
 
-(def forest-fire
-  [:dead :dead :dead :dead :alive])
-
 (defn newgrid-row
   [m initial i0 j0 i]
   (loop [j 0
@@ -74,24 +71,6 @@
       (if (= i (+ 2 m))
         newgrid
         (recur (inc i) (conj newgrid (newgrid-row m initial i0 j0 i)))))))
-      
-(defn next-state
-  "If a live tree is next to a burning tree, it burns;
-otherwise, it catches fire with probability p1.
-A burning tree dies.
-A dead tree has probability p2 of being replaced by a live tree."
-  [uc un us ue uw]
-  (let [p1 0.01
-        p2 0.3]
-    (cond
-      (= uc :alive) (cond
-                      (or (= un :burning) (= us :burning) (= ue :burning) (= uw :burning)) :burning
-                      (<= (Math/random) p1) :burning
-                      :else :alive)
-      (= uc :burning) :dead
-      :else (cond
-              (<= (Math/random) p2) :alive
-              :else :dead))))
 
 (defn neighbor-element
   [test u i j channel]
@@ -162,7 +141,7 @@ A dead tree has probability p2 of being replaced by a live tree."
     {:in in :out out}))
 
 (defn relax-phase
-  [q m qi qj north south east west b]
+  [next-state q m qi qj north south east west b]
   (let [assoc-next-state-in (fn [u i j]
                               (let [nextij (next-state ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
                                 (assoc-in u [i j] nextij)))
@@ -191,39 +170,30 @@ A dead tree has probability p2 of being replaced by a live tree."
       {:in in :out out})))
       
 (defn relax
-  [step q m qi qj north south east west u]
+  [next-state q m qi qj north south east west u]
   (let [out (chan)]
     (go
-      (when (and (= qi 1) (= qj 1)) (>! u-printer [['relax qi qj]]))
-      (let [r0 (relax-phase q m qi qj north south east west 0)
+      (let [r0 (relax-phase next-state q m qi qj north south east west 0)
             _ (>! (r0 :in) u)
             u0 (<! (r0 :out))
-            _ (when (and (= qi 1) (= qj 1)) (>! u-printer [[qi qj 'After 'step step 'first 'relax-phase] u0]))
-            r1 (relax-phase q m qi qj north south east west 1)
+            r1 (relax-phase next-state q m qi qj north south east west 1)
             _ (>! (r1 :in) u0)
             u1 (<! (r1 :out))]
-        (when (and (= qi 1) (= qj 1)) (>! u-printer [[qi qj 'After 'step step 'second 'relax-phase] u1]))
         (>! out u1)))
-      out))
+    out))
 
 (defn relaxation
-  [steps q m qi qj north south east west u]
+  [next-state steps q m qi qj north south east west u]
   (let [out (chan)]
     (go
-      (>! flow-printer ['Relaxation qi qj steps 'steps])
       (loop [step 0
              u u]
         (if (= step steps)
-          (do
-            (when (and (= qi 1) (= qj 1)) (>! u-printer [[qi qj 'relaxation 'returning] u]))
-            (>! out u))
-          (do
-            (when (and (= qi 1) (= qj 1)) (>! u-printer ['gonna 'relax qi qj 'step step]))
-            (let [r (relax step q m qi qj north south east west u)
-                  u (<! r)]
-              (recur (inc step) u))))))
+          (>! out u)
+          (let [r (relax next-state q m qi qj north south east west u)
+                u (<! r)]
+            (recur (inc step) u)))))
     out))
-
 
 (defmacro copy
   [count in out]
@@ -239,25 +209,20 @@ A dead tree has probability p2 of being replaced by a live tree."
         (let [ii (inc i)]
           (dotimes [j m]
             (let [jj (inc j)]
-              (when (and (= qi 1) (= qj 1)) (>! u-printer [['output ii jj ((subgrid ii) jj)]]))
               (>! out ((subgrid ii) jj))))
           (copy (* (- q qj) m) in out)))
       (copy (* (- q qi) m m q) in out))
     start))
   
 (defn node
-  [q m initial steps qi qj north south east west]
+  [q m initial next-state steps qi qj north south east west]
   ;; qi row number; qj column number
   (go
-    (>! flow-printer ['starting 'node qi qj])
-    (let [u (newgrid m initial qi qj)]
-      (when (and (= qi 1) (= qj 1)) (>! u-printer [[qi qj 'init] u]))
-      (let [r (relaxation steps q m qi qj north south east west u)
-            u (<! r)
-            _ (when (and (= qi 1) (= qj 1)) (>! u-printer [['After 'relaxation qi qj] u]))
-            output-process (output q m qi qj east west u)
-            ]
-        (>! output-process :start)))))
+    (let [u (newgrid m initial qi qj)
+          r (relaxation next-state steps q m qi qj north south east west u)
+          u (<! r)
+          output-process (output q m qi qj east west u)]
+      (>! output-process :start))))
 
 (defmacro get-row
   [n in]
@@ -283,7 +248,7 @@ through the interior elements only."
 
 (defn simulate
   ;; m must be even!
-  [q m steps initial-values]
+  [q m steps initial-values next-state]
   (let [line (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of line
         matrix (fn [] (vec (repeatedly (inc q) line)))
         h (matrix)
@@ -293,9 +258,9 @@ through the interior elements only."
     (go (>! p-printer (<! (master (* q m) ((h 0) q)))))
     
     (doseq [k (drop 1 (range (inc q)))]
-      (node q m initialize steps k 1 ((v (dec k)) 1) ((v k) 1) ((h k) 1) ((h (dec k)) q)))
+      (node q m initialize next-state steps k 1 ((v (dec k)) 1) ((v k) 1) ((h k) 1) ((h (dec k)) q)))
     
     (doseq [i (drop 1 (range (inc q)))
             j (drop 2 (range (inc q)))]
-      (node q m initialize steps i j ((v (dec i)) j) ((v i) j) ((h i) j) ((h i) (dec j))))))
+      (node q m initialize next-state steps i j ((v (dec i)) j) ((v i) j) ((h i) j) ((h i) (dec j))))))
     
