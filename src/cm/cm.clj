@@ -58,10 +58,12 @@
         last (- m b)]
     (go
       (<! in)
+      (let [new-u
+      
       (loop [k (- 2 b)
              u u]
         (if (> k last)
-          (>! out u)
+          u
           (let [u (if (> qi 1)
                     (assoc-in u [0 k] (<! north))
                     u)
@@ -70,7 +72,9 @@
                 u (if (> qj 1)
                     (assoc-in u [k 0] (<! west))
                     u)]
-            (recur (+ 2 k) u)))))
+            (recur (+ 2 k) u))))]
+        
+        (>! out new-u)))
     {:in in :out out}))
 
 (defn exchange-phase2
@@ -80,10 +84,12 @@
         last (dec (+ m b))]
     (go
       (<! in)
+      (let [new-u
+            
       (loop [k (inc b)
              u u]
         (if (> k last)
-          (>! out u)
+          u
           (let [_ (when (> qi 1) (>! north ((u 1) k)))
                 u (if (< qi q)
                     (assoc-in u [(inc m) k] (<! south))
@@ -92,7 +98,9 @@
                     (assoc-in u [k (inc m)] (<! east))
                     u)
                 _ (when (> qj 1) (>! west ((u k) 1)))]
-            (recur (+ 2 k) u)))))
+            (recur (+ 2 k) u))))]
+        
+        (>! out new-u)))
     {:in in :out out}))
 
 
