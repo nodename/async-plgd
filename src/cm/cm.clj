@@ -77,9 +77,7 @@
                          u u]
                     (if (> k last)
                       u
-                      (let [step (phase1-step q m qi qj channels u k)
-                            u (<! step)]
-                        (recur (+ 2 k) u))))]
+                      (recur (+ 2 k) (<! (phase1-step q m qi qj channels u k)))))]
         (>! out new-u)))
     {:in in :out out}))
 
@@ -109,9 +107,7 @@
                          u u]
                     (if (> k last)
                       u
-                      (let [step (phase2-step q m qi qj channels u k)
-                            u (<! step)]
-                        (recur (+ 2 k) u))))]
+                      (recur (+ 2 k) (<! (phase2-step q m qi qj channels u k)))))]
         (>! out new-u)))
     {:in in :out out}))
 
