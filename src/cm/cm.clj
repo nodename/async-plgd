@@ -49,16 +49,6 @@
             (conj grid (newgrid-row m initial i0 j0 i)))]
     (reduce f [] (range (+ 2 m)))))
 
-(defn neighbor-element
-  [test u i j channel]
-  (let [c (chan)]
-    (go
-      (let [val (if test
-                  (<! channel)
-                  ((u i) j))]
-        (>! c val)))
-    c))
-                         
 (defn exchange-phase1
   [q m qi qj b [north south east west] u]
   ;; qi row number, qj column number
@@ -72,12 +62,14 @@
              u u]
         (if (> k last)
           (>! out u)
-          (let [u0k (<! (neighbor-element (> qi 1) u 0 k north))
+          (let [u (if (> qi 1)
+                    (assoc-in u [0 k] (<! north))
+                    u)
                 _ (when (< qi q) (>! south ((u m) k)))
                 _ (when (< qj q) (>! east ((u k) m)))
-                uk0 (<! (neighbor-element (> qj 1) u k 0 west))
-                u (assoc-in u [0 k] u0k)
-                u (assoc-in u [k 0] uk0)]
+                u (if (> qj 1)
+                    (assoc-in u [k 0] (<! west))
+                    u)]
             (recur (+ 2 k) u)))))
     {:in in :out out}))
 
@@ -93,11 +85,13 @@
         (if (> k last)
           (>! out u)
           (let [_ (when (> qi 1) (>! north ((u 1) k)))
-                um1k (<! (neighbor-element (< qi q) u (inc m) k south))
-                ukm1 (<! (neighbor-element (< qj q) u k (inc m) east))
-                _ (when (> qj 1) (>! west ((u k) 1)))
-                u (assoc-in u [(inc m) k] um1k)
-                u (assoc-in u [k (inc m)] ukm1)]
+                u (if (< qi q)
+                    (assoc-in u [(inc m) k] (<! south))
+                    u)
+                u (if (< qj q)
+                    (assoc-in u [k (inc m)] (<! east))
+                    u)
+                _ (when (> qj 1) (>! west ((u k) 1)))]
             (recur (+ 2 k) u)))))
     {:in in :out out}))
 
