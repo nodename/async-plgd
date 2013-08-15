@@ -60,7 +60,7 @@
     c))
                          
 (defn exchange-phase1
-  [q m qi qj b north south east west u]
+  [q m qi qj b [north south east west] u]
   ;; qi row number, qj column number
   ;; qi, qj go from 1 to q inclusive
   (let [in (chan)
@@ -82,7 +82,7 @@
     {:in in :out out}))
 
 (defn exchange-phase2
-  [q m qi qj b north south east west u]
+  [q m qi qj b [north south east west] u]
   (let [in (chan)
         out (chan)
         last (dec (+ m b))]
@@ -103,22 +103,22 @@
 
 
 (defn exchange
-  [q m qi qj b north south east west u]
+  [q m qi qj b channels u]
   (let [in (chan)
         out (chan)]
     (go
       (<! in)
-      (let [p1 (exchange-phase1 q m qi qj b north south east west u)
+      (let [p1 (exchange-phase1 q m qi qj b channels u)
             _ (>! (p1 :in) :start)
             u (<! (p1 :out))
-            p2 (exchange-phase2 q m qi qj b north south east west u)
+            p2 (exchange-phase2 q m qi qj b channels u)
             _ (>! (p2 :in) :start)
             u (<! (p2 :out))]
         (>! out u)))
     {:in in :out out}))
 
 (defn relax-phase
-  [next-state q m qi qj north south east west b]
+  [next-state q m qi qj channels b]
   (let [assoc-next-state-in (fn [u i j]
                               (let [nextij (next-state ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
                                 (assoc-in u [i j] nextij)))
@@ -135,34 +135,34 @@
           out (chan)]
       (go
         (let [u (<! in)]
-          (let [x (exchange q m qi qj (- 1 b) north south east west u)
+          (let [x (exchange q m qi qj (- 1 b) channels u)
                 _ (>! (x :in) :start)
                 u (<! (x :out))]
             (>! out (assoc-next-states-in u)))))
       {:in in :out out})))
       
 (defn relax
-  [next-state q m qi qj north south east west u]
+  [next-state q m qi qj channels u]
   (let [out (chan)]
     (go
-      (let [r0 (relax-phase next-state q m qi qj north south east west 0)
+      (let [r0 (relax-phase next-state q m qi qj channels 0)
             _ (>! (r0 :in) u)
             u0 (<! (r0 :out))
-            r1 (relax-phase next-state q m qi qj north south east west 1)
+            r1 (relax-phase next-state q m qi qj channels 1)
             _ (>! (r1 :in) u0)
             u1 (<! (r1 :out))]
         (>! out u1)))
     out))
 
 (defn relaxation
-  [next-state steps q m qi qj north south east west u]
+  [next-state steps q m qi qj channels u]
   (let [out (chan)]
     (go
       (loop [step 0
              u u]
         (if (= step steps)
           (>! out u)
-          (let [r (relax next-state q m qi qj north south east west u)
+          (let [r (relax next-state q m qi qj channels u)
                 u (<! r)]
             (recur (inc step) u)))))
     out))
@@ -187,11 +187,11 @@
     start))
   
 (defn node
-  [q m initial next-state steps qi qj north south east west]
+  [q m initial next-state steps qi qj [north south east west :as channels]]
   ;; qi row number; qj column number
   (go
     (let [u (newgrid m initial qi qj)
-          r (relaxation next-state steps q m qi qj north south east west u)
+          r (relaxation next-state steps q m qi qj channels u)
           u (<! r)
           output-process (output q m qi qj east west u)]
       (>! output-process :start))))
@@ -230,9 +230,11 @@ through the interior elements only."
     (go (>! p-printer (<! (master (* q m) ((h 0) q)))))
     
     (doseq [k (range 1 (inc q))]
-      (node q m initialize next-state steps k 1 ((v (dec k)) 1) ((v k) 1) ((h k) 1) ((h (dec k)) q)))
+      (let [[north south east west :as channels] [((v (dec k)) 1) ((v k) 1) ((h k) 1) ((h (dec k)) q)]]
+        (node q m initialize next-state steps k 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
-      (node q m initialize next-state steps i j ((v (dec i)) j) ((v i) j) ((h i) j) ((h i) (dec j))))))
+      (let [[north south east west :as channels] [((v (dec i)) j) ((v i) j) ((h i) j) ((h i) (dec j))]]
+        (node q m initialize next-state steps i j channels)))))
     
