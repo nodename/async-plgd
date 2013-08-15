@@ -49,8 +49,23 @@
             (conj grid (newgrid-row m initial i0 j0 i)))]
     (reduce f [] (range (+ 2 m)))))
 
+(defn phase1-step
+  [q m qi qj [north south east west] u k]
+  (let [out (chan)]
+    (go
+      (let [u (if (> qi 1)
+                (assoc-in u [0 k] (<! north))
+                u)
+            _ (when (< qi q) (>! south ((u m) k)))
+            _ (when (< qj q) (>! east ((u k) m)))
+            u (if (> qj 1)
+                (assoc-in u [k 0] (<! west))
+                u)]
+        (>! out u)))
+    out))
+
 (defn exchange-phase1
-  [q m qi qj b [north south east west] u]
+  [q m qi qj b channels u]
   ;; qi row number, qj column number
   ;; qi, qj go from 1 to q inclusive
   (let [in (chan)
@@ -58,51 +73,47 @@
         last (- m b)]
     (go
       (<! in)
-      (let [new-u
-      
-      (loop [k (- 2 b)
-             u u]
-        (if (> k last)
-          u
-          (let [u (if (> qi 1)
-                    (assoc-in u [0 k] (<! north))
-                    u)
-                _ (when (< qi q) (>! south ((u m) k)))
-                _ (when (< qj q) (>! east ((u k) m)))
-                u (if (> qj 1)
-                    (assoc-in u [k 0] (<! west))
-                    u)]
-            (recur (+ 2 k) u))))]
-        
+      (let [new-u (loop [k (- 2 b)
+                         u u]
+                    (if (> k last)
+                      u
+                      (let [step (phase1-step q m qi qj channels u k)
+                            u (<! step)]
+                        (recur (+ 2 k) u))))]
         (>! out new-u)))
     {:in in :out out}))
 
+(defn phase2-step
+  [q m qi qj [north south east west] u k]
+  (let [out (chan)]
+    (go
+      (let [_ (when (> qi 1) (>! north ((u 1) k)))
+            u (if (< qi q)
+                (assoc-in u [(inc m) k] (<! south))
+                u)
+            u (if (< qj q)
+                (assoc-in u [k (inc m)] (<! east))
+                u)
+            _ (when (> qj 1) (>! west ((u k) 1)))]
+        (>! out u)))
+    out))
+
 (defn exchange-phase2
-  [q m qi qj b [north south east west] u]
+  [q m qi qj b channels u]
   (let [in (chan)
         out (chan)
         last (dec (+ m b))]
     (go
       (<! in)
-      (let [new-u
-            
-      (loop [k (inc b)
-             u u]
-        (if (> k last)
-          u
-          (let [_ (when (> qi 1) (>! north ((u 1) k)))
-                u (if (< qi q)
-                    (assoc-in u [(inc m) k] (<! south))
-                    u)
-                u (if (< qj q)
-                    (assoc-in u [k (inc m)] (<! east))
-                    u)
-                _ (when (> qj 1) (>! west ((u k) 1)))]
-            (recur (+ 2 k) u))))]
-        
+      (let [new-u (loop [k (inc b)
+                         u u]
+                    (if (> k last)
+                      u
+                      (let [step (phase2-step q m qi qj channels u k)
+                            u (<! step)]
+                        (recur (+ 2 k) u))))]
         (>! out new-u)))
     {:in in :out out}))
-
 
 (defn exchange
   [q m qi qj b channels u]
