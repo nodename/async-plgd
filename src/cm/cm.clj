@@ -50,8 +50,9 @@
     (reduce f [] (range (+ 2 m)))))
 
 (defn phase1-step
-  [q m qi qj [north south east west] u k]
-  (let [out (chan)]
+  [q m qi qj channels u k]
+  (let [{:keys [north south east west]} channels
+        out (chan)]
     (go
       (let [u (if (> qi 1)
                 (assoc-in u [0 k] (<! north))
@@ -82,8 +83,9 @@
     {:in in :out out}))
 
 (defn phase2-step
-  [q m qi qj [north south east west] u k]
-  (let [out (chan)]
+  [q m qi qj channels u k]
+  (let [{:keys [north south east west]} channels
+        out (chan)]
     (go
       (let [_ (when (> qi 1) (>! north ((u 1) k)))
             u (if (< qi q)
@@ -196,14 +198,14 @@
     start))
   
 (defn node
-  [q m initial next-state steps qi qj [north south east west :as channels]]
+  [q m initial next-state steps qi qj channels]
   ;; qi row number; qj column number
-  (go
-    (let [u (newgrid m initial qi qj)
-          r (relaxation next-state steps q m qi qj channels u)
-          u (<! r)
-          output-process (output q m qi qj east west u)]
-      (>! output-process :start))))
+  (let [{:keys [east west]} channels]
+    (go
+      (let [u (newgrid m initial qi qj)
+            u (<! (relaxation next-state steps q m qi qj channels u))
+            output-process (output q m qi qj east west u)]
+        (>! output-process :start)))))
 
 (defmacro get-row
   [n in]
@@ -239,11 +241,11 @@ through the interior elements only."
     (go (>! p-printer (<! (master (* q m) ((h 0) q)))))
     
     (doseq [k (range 1 (inc q))]
-      (let [[north south east west :as channels] [((v (dec k)) 1) ((v k) 1) ((h k) 1) ((h (dec k)) q)]]
+      (let [channels {:north ((v (dec k)) 1) :south ((v k) 1) :east ((h k) 1) :west ((h (dec k)) q)}]
         (node q m initialize next-state steps k 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
-      (let [[north south east west :as channels] [((v (dec i)) j) ((v i) j) ((h i) j) ((h i) (dec j))]]
+      (let [channels {:north ((v (dec i)) j) :south ((v i) j) :east ((h i) j) :west ((h i) (dec j))}]
         (node q m initialize next-state steps i j channels)))))
     
