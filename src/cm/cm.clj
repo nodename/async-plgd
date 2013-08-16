@@ -175,17 +175,14 @@
 
 (defn output
   [q m qi qj in out subgrid]
-  (let [start (chan)]
-    (go
-      (<! start)
-      (dotimes [i m]
-        (let [ii (inc i)]
-          (dotimes [j m]
-            (let [jj (inc j)]
-              (>! out ((subgrid ii) jj))))
-          (copy (* (- q qj) m) in out)))
-      (copy (* (- q qi) m m q) in out))
-    start))
+  (go
+    (dotimes [i m]
+      (let [ii (inc i)]
+        (dotimes [j m]
+          (let [jj (inc j)]
+            (>! out ((subgrid ii) jj))))
+        (copy (* (- q qj) m) in out)))
+    (copy (* (- q qi) m m q) in out)))
   
 (defn node
   [initialize relax q m qi qj channels]
@@ -193,9 +190,8 @@
   (let [{:keys [east west]} channels]
     (go
       (let [u (newgrid m initialize qi qj)
-            u (<! (relax q m qi qj channels u))
-            output-process (output q m qi qj east west u)]
-        (>! output-process :start)))))
+            u (<! (relax q m qi qj channels u))]
+        (output q m qi qj east west u)))))
 
 (defmacro get-row
   [n in]
