@@ -129,7 +129,7 @@
     {:in in :out out}))
 
 (defn relax-phase
-  [next-state q m qi qj channels b]
+  [next-state q m qi qj channels u b]
   (let [assoc-next-state-in (fn [u i j]
                               (let [nextij (next-state ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
                                 (assoc-in u [i j] nextij)))
@@ -142,31 +142,25 @@
         assoc-next-states-in (fn [u]
                                (reduce assoc-row-of-next-states-in u (range 1 (inc m))))]
         
-    (let [in (chan)
-          out (chan)]
+    (let [out (chan)]
       (go
-        (let [u (<! in)]
-          (let [x (exchange q m qi qj (- 1 b) channels u)
-                _ (>! (x :in) :start)
-                u (<! (x :out))]
-            (>! out (assoc-next-states-in u)))))
-      {:in in :out out})))
+        (let [x (exchange q m qi qj (- 1 b) channels u)
+              _ (>! (x :in) :start)
+              u (<! (x :out))]
+          (>! out (assoc-next-states-in u))))
+      out)))
       
 (defn relax
   [next-state q m qi qj channels u]
   (let [out (chan)]
     (go
-      (let [r0 (relax-phase next-state q m qi qj channels 0)
-            _ (>! (r0 :in) u)
-            u0 (<! (r0 :out))
-            r1 (relax-phase next-state q m qi qj channels 1)
-            _ (>! (r1 :in) u0)
-            u1 (<! (r1 :out))]
-        (>! out u1)))
+      (let [u (<! (relax-phase next-state q m qi qj channels u 0))
+            u (<! (relax-phase next-state q m qi qj channels u 1))]
+        (>! out u)))
     out))
 
 (defn relaxation
-  [next-state steps q m qi qj channels u]
+  [steps next-state q m qi qj channels u]
   (let [out (chan)]
     (go
       (loop [step 0
@@ -196,12 +190,12 @@
     start))
   
 (defn node
-  [q m initialize next-state steps qi qj channels]
+  [initialize steps next-state q m qi qj channels]
   ;; qi row number; qj column number
   (let [{:keys [east west]} channels]
     (go
       (let [u (newgrid m initialize qi qj)
-            u (<! (relaxation next-state steps q m qi qj channels u))
+            u (<! (relaxation steps next-state q m qi qj channels u))
             output-process (output q m qi qj east west u)]
         (>! output-process :start)))))
 
@@ -246,7 +240,7 @@ through the interior elements only."
                       :south ((ns-channels i) 1)
                       :east ((ew-channels i) 1)
                       :west ((ew-channels (dec i)) q)}]
-        (node q m initialize next-state steps i 1 channels)))
+        (node initialize steps next-state q m i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
@@ -254,5 +248,5 @@ through the interior elements only."
                       :south ((ns-channels i) j)
                       :east ((ew-channels i) j)
                       :west ((ew-channels i) (dec j))}]
-        (node q m initialize next-state steps i j channels)))))
+        (node initialize steps next-state q m i j channels)))))
     
