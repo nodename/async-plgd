@@ -119,32 +119,34 @@
     out))
 
 (defn relax-phase
-  [transition q m qi qj channels u b]
-  (let [assoc-next-state-in (fn [u i j]
-                              (let [nextij (transition ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
-                                (assoc-in u [i j] nextij)))
-        assoc-row-of-next-states-in (fn [u i]
-                                      (let [k (mod (+ i b) 2)
-                                            last (- m k)
-                                            f (fn [u j]
-                                                (assoc-next-state-in u i j))]
-                                        (reduce f u (range (- 2 k) (inc last) 2))))
-        assoc-next-states-in (fn [u]
-                               (reduce assoc-row-of-next-states-in u (range 1 (inc m))))]
-        
-    (let [out (chan)]
-      (go
-        (let [u (<! (exchange q m qi qj (- 1 b) channels u))
-              u (assoc-next-states-in u)]
-          (>! out u)))
-      out)))
+  [transition q m qi qj channels]
+  (fn [u b]
+    (let [assoc-next-state-in (fn [u i j]
+                                (let [nextij (transition ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
+                                  (assoc-in u [i j] nextij)))
+          assoc-row-of-next-states-in (fn [u i]
+                                        (let [k (mod (+ i b) 2)
+                                              last (- m k)
+                                              f (fn [u j]
+                                                  (assoc-next-state-in u i j))]
+                                          (reduce f u (range (- 2 k) (inc last) 2))))
+          assoc-next-states-in (fn [u]
+                                 (reduce assoc-row-of-next-states-in u (range 1 (inc m))))]
+      
+      (let [out (chan)]
+        (go
+          (let [u (<! (exchange q m qi qj (- 1 b) channels u))
+                u (assoc-next-states-in u)]
+            (>! out u)))
+        out))))
       
 (defn relaxation-step
   [transition q m qi qj channels u]
   (let [out (chan)]
     (go
-      (let [u (<! (relax-phase transition q m qi qj channels u 0))
-            u (<! (relax-phase transition q m qi qj channels u 1))]
+      (let [relaxation-phase (relax-phase transition q m qi qj channels)
+            u (<! (relaxation-phase u 0))
+            u (<! (relaxation-phase u 1))]
         (>! out u)))
     out))
 
@@ -213,8 +215,8 @@ through the interior elements only."
   ;; m must be even!
   [q m steps application]
   (let [{:keys [initial-values transition]} application
-        chan-row (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of chan-row
-        chan-matrix (fn [] (vec (repeatedly (inc q) chan-row)))
+        chan-row #(vec (repeatedly (inc q) chan)) ;; we only use elements 1 through q of chan-row
+        chan-matrix #(vec (repeatedly (inc q) chan-row))
         ew-channels (chan-matrix)
         ns-channels (chan-matrix)
         n (* q m)
