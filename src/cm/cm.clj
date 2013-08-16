@@ -129,9 +129,9 @@
     {:in in :out out}))
 
 (defn relax-phase
-  [next-state q m qi qj channels u b]
+  [transition q m qi qj channels u b]
   (let [assoc-next-state-in (fn [u i j]
-                              (let [nextij (next-state ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
+                              (let [nextij (transition ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
                                 (assoc-in u [i j] nextij)))
         assoc-row-of-next-states-in (fn [u i]
                                       (let [k (mod (+ i b) 2)
@@ -150,24 +150,24 @@
           (>! out (assoc-next-states-in u))))
       out)))
       
-(defn relax
-  [next-state q m qi qj channels u]
+(defn relaxation-step
+  [transition q m qi qj channels u]
   (let [out (chan)]
     (go
-      (let [u (<! (relax-phase next-state q m qi qj channels u 0))
-            u (<! (relax-phase next-state q m qi qj channels u 1))]
+      (let [u (<! (relax-phase transition q m qi qj channels u 0))
+            u (<! (relax-phase transition q m qi qj channels u 1))]
         (>! out u)))
     out))
 
-(defn relaxation
-  [steps next-state q m qi qj channels u]
+(defn relax
+  [steps transition q m qi qj channels u]
   (let [out (chan)]
     (go
       (loop [step 0
              u u]
         (if (= step steps)
           (>! out u)
-          (recur (inc step) (<! (relax next-state q m qi qj channels u))))))
+          (recur (inc step) (<! (relaxation-step transition q m qi qj channels u))))))
     out))
 
 (defmacro copy
@@ -190,12 +190,12 @@
     start))
   
 (defn node
-  [initialize steps next-state q m qi qj channels]
+  [initialize steps transition q m qi qj channels]
   ;; qi row number; qj column number
   (let [{:keys [east west]} channels]
     (go
       (let [u (newgrid m initialize qi qj)
-            u (<! (relaxation steps next-state q m qi qj channels u))
+            u (<! (relax steps transition q m qi qj channels u))
             output-process (output q m qi qj east west u)]
         (>! output-process :start)))))
 
@@ -226,7 +226,7 @@ through the interior elements only."
 (defn simulate
   ;; m must be even!
   [q m steps application]
-  (let [{:keys [initial-values next-state]} application
+  (let [{:keys [initial-values transition]} application
         line (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of line
         matrix (fn [] (vec (repeatedly (inc q) line)))
         ew-channels (matrix)
@@ -240,7 +240,7 @@ through the interior elements only."
                       :south ((ns-channels i) 1)
                       :east ((ew-channels i) 1)
                       :west ((ew-channels (dec i)) q)}]
-        (node initialize steps next-state q m i 1 channels)))
+        (node initialize steps transition q m i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
@@ -248,5 +248,5 @@ through the interior elements only."
                       :south ((ns-channels i) j)
                       :east ((ew-channels i) j)
                       :west ((ew-channels i) (dec j))}]
-        (node initialize steps next-state q m i j channels)))))
+        (node initialize steps transition q m i j channels)))))
     

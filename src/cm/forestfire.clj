@@ -4,7 +4,7 @@
 (def initial-values
   [:dead :dead :dead :dead :alive])
 
-(defn next-state
+(defn transition
   "If a live tree is next to a burning tree, it burns;
 otherwise, it catches fire with probability p1.
 A burning tree dies.
@@ -23,4 +23,4 @@ A dead tree has probability p2 of being replaced by a live tree."
         :else :dead))))
 
 (def forest-fire {:initial-values initial-values
-                  :next-state next-state})
+                  :transition transition})
