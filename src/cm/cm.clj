@@ -159,16 +159,17 @@
         (>! out u)))
     out))
 
-(defn relax
-  [steps transition q m qi qj channels u]
-  (let [out (chan)]
-    (go
-      (loop [step 0
-             u u]
-        (if (= step steps)
-          (>! out u)
-          (recur (inc step) (<! (relaxation-step transition q m qi qj channels u))))))
-    out))
+(defn relaxation
+  [steps transition]
+  (fn [q m qi qj channels u]
+    (let [out (chan)]
+      (go
+        (loop [step 0
+               u u]
+          (if (= step steps)
+            (>! out u)
+            (recur (inc step) (<! (relaxation-step transition q m qi qj channels u))))))
+      out)))
 
 (defmacro copy
   [count in out]
@@ -190,12 +191,12 @@
     start))
   
 (defn node
-  [initialize steps transition q m qi qj channels]
+  [initialize relax q m qi qj channels]
   ;; qi row number; qj column number
   (let [{:keys [east west]} channels]
     (go
       (let [u (newgrid m initialize qi qj)
-            u (<! (relax steps transition q m qi qj channels u))
+            u (<! (relax q m qi qj channels u))
             output-process (output q m qi qj east west u)]
         (>! output-process :start)))))
 
@@ -231,16 +232,18 @@ through the interior elements only."
         matrix (fn [] (vec (repeatedly (inc q) line)))
         ew-channels (matrix)
         ns-channels (matrix)
-        initialize (initial (* q m) initial-values)]
+        n (* q m)
+        initialize (initial n initial-values)
+        relax (relaxation steps transition)]
     
-    (go (>! p-printer (<! (master (* q m) ((ew-channels 0) q)))))
+    (go (>! p-printer (<! (master n ((ew-channels 0) q)))))
     
     (doseq [i (range 1 (inc q))]
       (let [channels {:north ((ns-channels (dec i)) 1)
                       :south ((ns-channels i) 1)
                       :east ((ew-channels i) 1)
                       :west ((ew-channels (dec i)) q)}]
-        (node initialize steps transition q m i 1 channels)))
+        (node initialize relax q m i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
@@ -248,5 +251,5 @@ through the interior elements only."
                       :south ((ns-channels i) j)
                       :east ((ew-channels i) j)
                       :west ((ew-channels i) (dec j))}]
-        (node initialize steps transition q m i j channels)))))
+        (node initialize relax q m i j channels)))))
     
