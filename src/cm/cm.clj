@@ -42,12 +42,13 @@
     (reduce f [] (range (+ 2 m)))))
       
 (defn newgrid
-  [m initialize qi qj]
-  (let [i0 (* (dec qi) m)
-        j0 (* (dec qj) m)
-        f (fn [grid i]
-            (conj grid (newgrid-row m initialize i0 j0 i)))]
-    (reduce f [] (range (+ 2 m)))))
+  [m initialize]
+  (fn [qi qj]
+    (let [i0 (* (dec qi) m)
+          j0 (* (dec qj) m)
+          f (fn [grid i]
+              (conj grid (newgrid-row m initialize i0 j0 i)))]
+      (reduce f [] (range (+ 2 m))))))
 
 (defn phase1-step
   [q m qi qj channels u k]
@@ -151,8 +152,8 @@
     out))
 
 (defn relaxation
-  [steps transition]
-  (fn [q m qi qj channels u]
+  [q m steps transition]
+  (fn [qi qj channels u]
     (let [out (chan)]
       (go
         (loop [step 0
@@ -167,8 +168,9 @@
   `(dotimes [_# ~count]
     (>! ~out (<! ~in))))
 
-(defn output
-  [q m qi qj in out subgrid]
+(defn output-fn
+  [q m]
+  (fn [qi qj in out subgrid]
   (go
     (dotimes [i m]
       (let [ii (inc i)]
@@ -176,16 +178,17 @@
           (let [jj (inc j)]
             (>! out ((subgrid ii) jj))))
         (copy (* (- q qj) m) in out)))
-    (copy (* (- q qi) m m q) in out)))
+    (copy (* (- q qi) m m q) in out))))
   
 (defn node
-  [initialize relax q m qi qj channels]
+  [init relax output]
+  (fn [qi qj channels]
   ;; qi row number; qj column number
-  (let [{:keys [east west]} channels]
-    (go
-      (let [u (newgrid m initialize qi qj)
-            u (<! (relax q m qi qj channels u))]
-        (output q m qi qj east west u)))))
+    (let [{:keys [east west]} channels]
+      (go
+        (let [u (init qi qj)
+              u (<! (relax qi qj channels u))]
+          (output qi qj east west u))))))
 
 (defmacro get-row
   [n in]
@@ -221,7 +224,10 @@ through the interior elements only."
         ns-channels (chan-matrix)
         n (* q m)
         initialize (initial n initial-values)
-        relax (relaxation steps transition)]
+        init (newgrid m initialize)
+        relax (relaxation q m steps transition)
+        output (output-fn q m)
+        start-node (node init relax output)]
     
     (go (>! p-printer (<! (master n ((ew-channels 0) q)))))
     
@@ -230,7 +236,7 @@ through the interior elements only."
                       :south ((ns-channels i) 1)
                       :east ((ew-channels i) 1)
                       :west ((ew-channels (dec i)) q)}]
-        (node initialize relax q m i 1 channels)))
+        (start-node i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
@@ -238,5 +244,5 @@ through the interior elements only."
                       :south ((ns-channels i) j)
                       :east ((ew-channels i) j)
                       :west ((ew-channels i) (dec j))}]
-        (node initialize relax q m i j channels)))))
+        (start-node i j channels)))))
     
