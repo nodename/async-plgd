@@ -240,11 +240,17 @@ through the interior elements only."
     (go (>! p-printer (<! (master (* q m) ((ew-channels 0) q)))))
     
     (doseq [i (range 1 (inc q))]
-      (let [channels {:north ((ns-channels (dec i)) 1) :south ((ns-channels i) 1) :east ((ew-channels i) 1) :west ((ew-channels (dec i)) q)}]
+      (let [channels {:north ((ns-channels (dec i)) 1)
+                      :south ((ns-channels i) 1)
+                      :east ((ew-channels i) 1)
+                      :west ((ew-channels (dec i)) q)}]
         (node q m initialize next-state steps i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
-      (let [channels {:north ((ns-channels (dec i)) j) :south ((ns-channels i) j) :east ((ew-channels i) j) :west ((ew-channels i) (dec j))}]
+      (let [channels {:north ((ns-channels (dec i)) j)
+                      :south ((ns-channels i) j)
+                      :east ((ew-channels i) j)
+                      :west ((ew-channels i) (dec j))}]
         (node q m initialize next-state steps i j channels)))))
     
