@@ -115,10 +115,8 @@
 
 (defn exchange
   [q m qi qj b channels u]
-  (let [in (chan)
-        out (chan)]
+  (let [out (chan)]
     (go
-      (<! in)
       (let [p1 (exchange-phase1 q m qi qj b channels u)
             _ (>! (p1 :in) :start)
             u (<! (p1 :out))
@@ -126,7 +124,7 @@
             _ (>! (p2 :in) :start)
             u (<! (p2 :out))]
         (>! out u)))
-    {:in in :out out}))
+    out))
 
 (defn relax-phase
   [transition q m qi qj channels u b]
@@ -144,10 +142,9 @@
         
     (let [out (chan)]
       (go
-        (let [x (exchange q m qi qj (- 1 b) channels u)
-              _ (>! (x :in) :start)
-              u (<! (x :out))]
-          (>! out (assoc-next-states-in u))))
+        (let [u (<! (exchange q m qi qj (- 1 b) channels u))
+              u (assoc-next-states-in u)]
+          (>! out u)))
       out)))
       
 (defn relaxation-step
