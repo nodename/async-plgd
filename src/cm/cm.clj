@@ -228,10 +228,10 @@ through the interior elements only."
   ;; m must be even!
   [q m steps application]
   (let [{:keys [initial-values transition]} application
-        line (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of line
-        matrix (fn [] (vec (repeatedly (inc q) line)))
-        ew-channels (matrix)
-        ns-channels (matrix)
+        chan-row (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of chan-row
+        chan-matrix (fn [] (vec (repeatedly (inc q) chan-row)))
+        ew-channels (chan-matrix)
+        ns-channels (chan-matrix)
         n (* q m)
         initialize (initial n initial-values)
         relax (relaxation steps transition)]
