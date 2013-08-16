@@ -19,21 +19,16 @@
 (def u-printer (sink))
 (def val-printer (sink))
 
-;; grid is a qXq matrix of nodes (example: q = 3)
-;; a node has coordinates qi, qj which range from 1 to q inclusive
-;; each node has a mXm subgrid (example: m = 2) plus 4m boundary elements
-;; NOTE m must be even
-;; n = m * q
-
 (defn initial
-  [n [u1 u2 u3 u4 u5]]
-  (fn [i j]
-    (cond
-      (zero? i) u1
-      (= (inc n) i) u2
-      (= (inc n) j) u3
-      (zero? j) u4
-      :else u5)))
+  [n initial-values]
+  (let [{:keys [north-boundary south-boundary east-boundary west-boundary interior]} initial-values]
+    (fn [i j]
+      (cond
+        (zero? i) north-boundary
+        (= (inc n) i) south-boundary
+        (= (inc n) j) east-boundary
+        (zero? j) west-boundary
+        :else interior))))
 
 (defn newgrid-row
   [m initialize i0 j0 i]
@@ -216,7 +211,25 @@ through the interior elements only."
     out))
 
 (defn simulate
-  ;; m must be even!
+"Create a matrix of qXq processor nodes.
+Every node is connected to its nearest neighbors (if any)
+by four communication channels named north, south, east, and west.
+Each processor node is responsible for a subgrid of mXm data cells
+within the complete nXn grid, where n = q * m
+(m must be even because we did not bother to code for the odd case.)
+After initializing its subgrid, each node will update the subgrid
+a fixed number of times (specified by the steps parameter)
+before outputting the final values.
+The nodes will update their subgrids simultaneously.
+In numerical analysis, grid iteration is known as relaxation.
+
+The nXn data grid is surrounded by a row of boundary cells on each side.
+The application object must specify:
+    a fixed value for the elements of each boundary
+    and an initial value for the interior elements;
+    and a transition function that returns the next value for a cell
+    given its current value and those of its neighbors.
+"
   [q m steps application]
   (let [{:keys [initial-values transition]} application
         chan-row #(vec (repeatedly (inc q) chan)) ;; we only use elements 1 through q of chan-row
@@ -231,6 +244,8 @@ through the interior elements only."
         start-node (node init relax output)]
     
     (go (>! p-printer (<! (master n ((ew-channels 0) q)))))
+    
+    ;; node coordinates range from 1 to q inclusive
     
     (doseq [i (range 1 (inc q))]
       (let [channels {:north ((ns-channels (dec i)) 1)

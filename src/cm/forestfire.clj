@@ -2,7 +2,11 @@
   (:require [cm.cm :refer [simulate]]))
 
 (def initial-values
-  [:dead :dead :dead :dead :alive])
+  {:north-boundary :dead
+   :south-boundary :dead
+   :east-boundary :dead
+   :west-boundary :dead
+   :interior :alive})
 
 (defn transition
   "If a live tree is next to a burning tree, it burns;
