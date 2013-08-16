@@ -220,11 +220,13 @@ the north boundary row, i.e. the channel that receives the output from the pipel
 through the interior elements only."
   [n in]
   (let [out (chan)]
-    (go (loop [i 0
-               grid []]
-          (if (= i n)
-            (>! out grid)
-            (recur (inc i) (conj grid (get-row n in))))))
+    (go
+      (let [grid (loop [i 0
+                        grid []]
+                   (if (= i n)
+                     grid
+                     (recur (inc i) (conj grid (get-row n in)))))]
+        (>! out grid)))
     out))
 
 (defn simulate
