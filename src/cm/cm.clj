@@ -36,17 +36,17 @@
       :else u5)))
 
 (defn newgrid-row
-  [m initial i0 j0 i]
+  [m initialize i0 j0 i]
   (let [f (fn [row j]
-            (conj row (initial (+ i0 i) (+ j0 j))))]
+            (conj row (initialize (+ i0 i) (+ j0 j))))]
   (reduce f [] (range (+ 2 m)))))
       
 (defn newgrid
-  [m initial qi qj]
+  [m initialize qi qj]
   (let [i0 (* (dec qi) m)
         j0 (* (dec qj) m)
         f (fn [grid i]
-            (conj grid (newgrid-row m initial i0 j0 i)))]
+            (conj grid (newgrid-row m initialize i0 j0 i)))]
     (reduce f [] (range (+ 2 m)))))
 
 (defn phase1-step
@@ -173,9 +173,7 @@
              u u]
         (if (= step steps)
           (>! out u)
-          (let [r (relax next-state q m qi qj channels u)
-                u (<! r)]
-            (recur (inc step) u)))))
+          (recur (inc step) (<! (relax next-state q m qi qj channels u))))))
     out))
 
 (defmacro copy
@@ -198,11 +196,11 @@
     start))
   
 (defn node
-  [q m initial next-state steps qi qj channels]
+  [q m initialize next-state steps qi qj channels]
   ;; qi row number; qj column number
   (let [{:keys [east west]} channels]
     (go
-      (let [u (newgrid m initial qi qj)
+      (let [u (newgrid m initialize qi qj)
             u (<! (relaxation next-state steps q m qi qj channels u))
             output-process (output q m qi qj east west u)]
         (>! output-process :start)))))
@@ -231,21 +229,22 @@ through the interior elements only."
 
 (defn simulate
   ;; m must be even!
-  [q m steps initial-values next-state]
-  (let [line (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of line
+  [q m steps application]
+  (let [{:keys [initial-values next-state]} application
+        line (fn [] (vec (repeatedly (inc q) chan))) ;; we only use elements 1 through q of line
         matrix (fn [] (vec (repeatedly (inc q) line)))
-        h (matrix)
-        v (matrix)
+        ew-channels (matrix)
+        ns-channels (matrix)
         initialize (initial (* q m) initial-values)]
     
-    (go (>! p-printer (<! (master (* q m) ((h 0) q)))))
+    (go (>! p-printer (<! (master (* q m) ((ew-channels 0) q)))))
     
-    (doseq [k (range 1 (inc q))]
-      (let [channels {:north ((v (dec k)) 1) :south ((v k) 1) :east ((h k) 1) :west ((h (dec k)) q)}]
-        (node q m initialize next-state steps k 1 channels)))
+    (doseq [i (range 1 (inc q))]
+      (let [channels {:north ((ns-channels (dec i)) 1) :south ((ns-channels i) 1) :east ((ew-channels i) 1) :west ((ew-channels (dec i)) q)}]
+        (node q m initialize next-state steps i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
-      (let [channels {:north ((v (dec i)) j) :south ((v i) j) :east ((h i) j) :west ((h i) (dec j))}]
+      (let [channels {:north ((ns-channels (dec i)) j) :south ((ns-channels i) j) :east ((ew-channels i) j) :west ((ew-channels i) (dec j))}]
         (node q m initialize next-state steps i j channels)))))
     

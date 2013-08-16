@@ -1,7 +1,7 @@
 (ns cm.forestfire
   (:require [cm.cm :refer [simulate]]))
 
-(def forest-fire
+(def initial-values
   [:dead :dead :dead :dead :alive])
 
 (defn next-state
@@ -21,3 +21,6 @@ A dead tree has probability p2 of being replaced by a live tree."
       (cond
         (<= (Math/random) p2) :alive
         :else :dead))))
+
+(def forest-fire {:initial-values initial-values
+                  :next-state next-state})
