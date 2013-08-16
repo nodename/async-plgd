@@ -39,7 +39,7 @@
   [m initialize i0 j0 i]
   (let [f (fn [row j]
             (conj row (initialize (+ i0 i) (+ j0 j))))]
-  (reduce f [] (range (+ 2 m)))))
+    (reduce f [] (range (+ 2 m)))))
       
 (defn newgrid
   [m initialize qi qj]
@@ -69,18 +69,16 @@
   [q m qi qj b channels u]
   ;; qi row number, qj column number
   ;; qi, qj go from 1 to q inclusive
-  (let [in (chan)
-        out (chan)
+  (let [out (chan)
         last (- m b)]
     (go
-      (<! in)
       (let [new-u (loop [k (- 2 b)
                          u u]
                     (if (> k last)
                       u
                       (recur (+ 2 k) (<! (phase1-step q m qi qj channels u k)))))]
         (>! out new-u)))
-    {:in in :out out}))
+    out))
 
 (defn phase2-step
   [q m qi qj channels u k]
@@ -100,29 +98,23 @@
 
 (defn exchange-phase2
   [q m qi qj b channels u]
-  (let [in (chan)
-        out (chan)
+  (let [out (chan)
         last (dec (+ m b))]
     (go
-      (<! in)
       (let [new-u (loop [k (inc b)
                          u u]
                     (if (> k last)
                       u
                       (recur (+ 2 k) (<! (phase2-step q m qi qj channels u k)))))]
         (>! out new-u)))
-    {:in in :out out}))
+    out))
 
 (defn exchange
   [q m qi qj b channels u]
   (let [out (chan)]
     (go
-      (let [p1 (exchange-phase1 q m qi qj b channels u)
-            _ (>! (p1 :in) :start)
-            u (<! (p1 :out))
-            p2 (exchange-phase2 q m qi qj b channels u)
-            _ (>! (p2 :in) :start)
-            u (<! (p2 :out))]
+      (let [u (<! (exchange-phase1 q m qi qj b channels u))
+            u (<! (exchange-phase2 q m qi qj b channels u))]
         (>! out u)))
     out))
 
