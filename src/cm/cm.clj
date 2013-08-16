@@ -156,11 +156,12 @@
   (fn [qi qj channels u]
     (let [out (chan)]
       (go
-        (loop [step 0
-               u u]
-          (if (= step steps)
-            (>! out u)
-            (recur (inc step) (<! (relaxation-step transition q m qi qj channels u))))))
+        (let [u (loop [step 0
+                       u u]
+                  (if (= step steps)
+                    u
+                    (recur (inc step) (<! (relaxation-step transition q m qi qj channels u)))))]
+          (>! out u)))
       out)))
 
 (defmacro copy
