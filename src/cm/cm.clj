@@ -199,15 +199,16 @@
 The single input channel comes from the output function of channel h0q (the last channel of
 the north boundary row, i.e. the channel that receives the output from the pipeline threaded
 through the interior elements only."
-  [n in]
+  [n in startTime]
   (let [out (chan)]
     (go
       (let [grid (loop [i 0
                         grid []]
                    (if (= i n)
                      grid
-                     (recur (inc i) (conj grid (get-row n in)))))]
-        (>! out grid)))
+                     (recur (inc i) (conj grid (get-row n in)))))
+            elapsed-ms (long (/ (- (System/nanoTime) startTime) 1000000))]
+        (>! out [elapsed-ms grid])))
     out))
 
 (defn simulate
@@ -241,9 +242,10 @@ The application object must specify:
         init (newgrid m initialize)
         relax (relaxation q m steps transition)
         output (output-fn q m)
-        start-node (node init relax output)]
+        start-node (node init relax output)
+        startTime (System/nanoTime)]
     
-    (go (>! p-printer (<! (master n ((ew-channels 0) q)))))
+    (go (>! p-printer (<! (master n ((ew-channels 0) q) startTime))))
     
     ;; node coordinates range from 1 to q inclusive
     
