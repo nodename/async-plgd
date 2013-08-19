@@ -118,8 +118,7 @@
   [transition q m qi qj channels]
   (fn [u b]
     (let [assoc-next-state-in (fn [u i j]
-                                (let [nextij (transition ((u i) j) ((u (dec i)) j) ((u (inc i)) j) ((u i) (inc j)) ((u i) (dec j)))]
-                                  (assoc-in u [i j] nextij)))
+                                (assoc-in u [i j] (transition u i j)))
           assoc-row-of-next-states-in (fn [u i]
                                         (let [k (mod (+ i b) 2)
                                               last (- m k)
@@ -229,7 +228,7 @@ The application object must specify:
     a fixed value for the elements of each boundary
     and an initial value for the interior elements;
     and a transition function that returns the next value for a cell
-    given its current value and those of its neighbors.
+    given the subgrid and the cell's position in the subgrid.
 "
   [q m steps application]
   (let [{:keys [initial-values transition]} application
