@@ -19,7 +19,7 @@
 (def u-printer (sink))
 (def val-printer (sink))
 
-(defn initial
+(defn initializer
   [n initial-values]
   (let [{:keys [north-boundary south-boundary east-boundary west-boundary interior]} initial-values]
     (fn [i j]
@@ -237,7 +237,7 @@ The application object must specify:
         ew-channels (chan-matrix)
         ns-channels (chan-matrix)
         n (* q m)
-        initialize (initial n initial-values)
+        initialize (initializer n initial-values)
         init (newgrid m initialize)
         relax (relaxation q m steps transition)
         output (output-fn q m)
