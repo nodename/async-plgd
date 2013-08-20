@@ -52,13 +52,14 @@
     (go
       (when (< qi q) (>! south ((u m) k)))
       (when (< qj q) (>! east ((u k) m)))
-      (let [u (if (> qi 1)
-                (assoc-in u [0 k] (<! north))
-                u)
-            u (if (> qj 1)
-                (assoc-in u [k 0] (<! west))
-                u)]
-        (>! out u)))
+      (go
+        (let [u (if (> qi 1)
+                  (assoc-in u [0 k] (<! north))
+                  u)
+              u (if (> qj 1)
+                  (assoc-in u [k 0] (<! west))
+                  u)]
+          (>! out u))))
     out))
 
 (defn exchange-phase1
@@ -83,13 +84,14 @@
     (go
       (when (> qi 1) (>! north ((u 1) k)))
       (when (> qj 1) (>! west ((u k) 1)))
-      (let [u (if (< qi q)
-                (assoc-in u [(inc m) k] (<! south))
-                u)
-            u (if (< qj q)
-                (assoc-in u [k (inc m)] (<! east))
-                u)]
-        (>! out u)))
+      (go
+        (let [u (if (< qi q)
+                  (assoc-in u [(inc m) k] (<! south))
+                  u)
+              u (if (< qj q)
+                  (assoc-in u [k (inc m)] (<! east))
+                  u)]
+          (>! out u))))
     out))
 
 (defn exchange-phase2
