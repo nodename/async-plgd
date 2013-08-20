@@ -1,6 +1,6 @@
 # async-plgd
 
-### hoare:
+## hoare
 
 Examples corresponding to those in C.A.R. Hoare,
 ["Communicating Sequential Processes"](http://www.cs.virginia.edu/crab/hoare1978csp.pdf) (CACM 21:8 August 1978).
@@ -23,7 +23,7 @@ section 5 of the paper, "Monitors and Scheduling"
 
 section 6 of the paper, "Miscellaneous"
 
-## Usage
+#### Usage
 
 Clone the [core.async](http://github.com/clojure/core.async) repo to a
 convenient location. `cd` into the repo and run `lein install`.
@@ -55,6 +55,24 @@ and run any of the test functions in the corresponding .clj file.
 
 But mainly, read the source. Comments, corrections, criticisms are welcome.
 
+## cm
+
+A core.async implementation of Per Brinch Hansen,
+["Parallel Cellular Automata"](http://surface.syr.edu/eecs_techreports/167) (1992).
+
+#### Usage
+
+```
+(use 'cm.forestfire)
+```
+or
+```
+(use 'cm.laplace)
+```
+and then
+```
+(run 3 3 100)
+```
 ## License
 
 Copyright © 2013 Alan Shaw
