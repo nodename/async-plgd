@@ -1,5 +1,5 @@
-(ns cm.forestfire
-  (:require [cm.cellular :refer [simulate]]))
+(ns cellular.forestfire
+  (:require [cellular.cellular :refer [simulate]]))
 
 (def initial-values
   {:north-boundary :dead

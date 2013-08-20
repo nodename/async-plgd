@@ -1,4 +1,4 @@
-(ns cm.cellular
+(ns cellular.cellular
   (:require [clojure.core.async :refer :all]
             [clojure.pprint :refer [pprint]]))
 
