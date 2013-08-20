@@ -163,7 +163,7 @@
   `(dotimes [_# ~count]
     (>! ~out (<! ~in))))
 
-(defn output-fn
+(defn outputter
   [q m]
   (fn [qi qj in out subgrid]
   (go
@@ -240,7 +240,7 @@ The application object must specify:
         initialize (initializer n initial-values)
         init (newgrid m initialize)
         relax (relaxation q m steps transition)
-        output (output-fn q m)
+        output (outputter q m)
         start-node (node init relax output)
         startTime (System/nanoTime)]
     
