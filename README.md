@@ -55,7 +55,7 @@ and run any of the test functions in the corresponding .clj file.
 
 But mainly, read the source. Comments, corrections, criticisms are welcome.
 
-## cm
+## cellular
 
 A core.async implementation of Per Brinch Hansen,
 ["Parallel Cellular Automata"](http://surface.syr.edu/eecs_techreports/167) (1992).
@@ -63,13 +63,13 @@ A core.async implementation of Per Brinch Hansen,
 #### Usage
 
 ```
-(use 'cm.forestfire)
+(use 'cellular.forestfire)
 ```
 or
 ```
-(use 'cm.laplace)
+(use 'cellular.laplace)
 ```
-and then
+and then (for example)
 ```
 (run 3 3 100)
 ```

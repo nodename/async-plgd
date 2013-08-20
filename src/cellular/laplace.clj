@@ -1,5 +1,5 @@
-(ns cm.laplace
-  (:require [cm.cellular :refer [simulate]]))
+(ns cellular.laplace
+  (:require [cellular.cellular :refer [simulate]]))
 
 (def initial-values
   {:north-boundary 0
