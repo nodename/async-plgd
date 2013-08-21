@@ -58,7 +58,7 @@ But mainly, read the source. Comments, corrections, criticisms are welcome.
 ## cellular
 
 A core.async implementation of Per Brinch Hansen,
-["Parallel Cellular Automata"](http://surface.syr.edu/eecs_techreports/167) (1992).
+["Parallel Cellular Automata: A Model Program for Computational Science"](http://surface.syr.edu/eecs_techreports/167) (1992).
 
 #### Usage
 
