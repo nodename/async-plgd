@@ -71,7 +71,7 @@ or
 ```
 and then (for example)
 ```
-(run 3 3 100)
+(run 3 2 100)
 ```
 ## License
 
