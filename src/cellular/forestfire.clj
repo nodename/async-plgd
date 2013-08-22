@@ -1,5 +1,6 @@
 (ns cellular.forestfire
-  (:require [cellular.cellular :refer [simulate]]))
+  (:require [cellular.cellular :refer [simulate]]
+            [utils.helpers :refer :all]))
 
 (def initial-values
   {:north-boundary :dead
@@ -35,4 +36,4 @@ A dead tree has probability p2 of being replaced by a live tree."
   [q m steps]
   (let [application {:initial-values initial-values
                      :transition transition}]
-    (simulate q m steps application)))
+    (simulate q m steps application (pprinter))))

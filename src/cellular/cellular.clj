@@ -2,23 +2,6 @@
   (:require [clojure.core.async :refer :all]
             [clojure.pprint :refer [pprint]]))
 
-(defn pprinter []
-  (let [in (chan)]
-    (go (while true
-          (pprint (<! in))))
-    in))
-
-(defn sink []
-  (let [in (chan)]
-    (go (while true
-          (<! in)))
-    in))
-
-(def p-printer (pprinter))
-(def flow-printer (sink))
-(def u-printer (sink))
-(def val-printer (sink))
-
 (defn initializer
   [n initial-values]
   (let [{:keys [north-boundary south-boundary east-boundary west-boundary interior]} initial-values]
@@ -220,7 +203,7 @@ within the complete nXn grid, where n = q * m
 (m must be even because we did not bother to code for the odd case.)
 After initializing its subgrid, each node will update the subgrid
 a fixed number of times (specified by the steps parameter)
-before outputting the final values.
+before outputting the final values to the specified out channel.
 The nodes will update their subgrids simultaneously.
 In numerical analysis, grid iteration is known as relaxation.
 
@@ -231,7 +214,7 @@ The application object must specify:
     and a transition function that returns the next value for a cell
     given the subgrid and the cell's position in the subgrid.
 "
-  [q m steps application]
+  [q m steps application out]
   (let [{:keys [initial-values transition]} application
         chan-row #(vec (repeatedly (inc q) chan)) ;; we only use elements 1 through q of chan-row
         chan-matrix #(vec (repeatedly (inc q) chan-row))
@@ -245,7 +228,7 @@ The application object must specify:
         start-node (node init relax output)
         start-time (System/nanoTime)]
     
-    (go (>! p-printer (<! (master n ((ew-channels 0) q) start-time))))
+    (go (>! out (<! (master n ((ew-channels 0) q) start-time))))
     
     ;; node coordinates range from 1 to q inclusive
     

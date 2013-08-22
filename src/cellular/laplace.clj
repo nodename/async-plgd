@@ -1,5 +1,6 @@
 (ns cellular.laplace
-  (:require [cellular.cellular :refer [simulate]]))
+  (:require [cellular.cellular :refer [simulate]]
+            [utils.helpers :refer :all]))
 
 (def initial-values
   {:north-boundary 0
@@ -36,4 +37,4 @@ with parity ordering."
   [q m steps]
   (let [application {:initial-values initial-values
                      :transition (transitioner (* q m))}]
-    (simulate q m steps application)))
+    (simulate q m steps application (pprinter))))
