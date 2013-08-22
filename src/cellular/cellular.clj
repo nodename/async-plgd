@@ -203,11 +203,10 @@ through the interior elements only."
   [n in start-time]
   (let [out (chan)]
     (go
-      (let [grid (loop [i 0
-                        grid []]
-                   (if (= i n)
+      (let [grid (loop [grid []]
+                   (if (= (count grid) n)
                      grid
-                     (recur (inc i) (conj grid (get-row n in)))))
+                     (recur (conj grid (get-row n in)))))
             elapsed-ms (long (/ (- (System/nanoTime) start-time) 1000000))]
         (>! out [elapsed-ms grid])))
     out))
