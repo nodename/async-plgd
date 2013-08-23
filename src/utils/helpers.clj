@@ -1,5 +1,5 @@
 (ns utils.helpers
-  (:require [clojure.core.async :refer [<! go]]
+  (:require [clojure.core.async :refer [<! chan go]]
              [fipp.edn :refer [pprint]]))
 
 (defn pprinter []

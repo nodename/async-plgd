@@ -1,6 +1,7 @@
 (ns cellular.forestfire
-  (:require [cellular.cellular :refer [simulate]]
-            [utils.helpers :refer :all]))
+  (:require [clojure.core.async :refer [>! <! go]]
+            [cellular.cellular :refer [simulate]]
+            [utils.helpers :refer [print-all<!]]))
 
 (def initial-values
   {:north-boundary :dead
@@ -36,4 +37,6 @@ A dead tree has probability p2 of being replaced by a live tree."
   [q m steps]
   (let [application {:initial-values initial-values
                      :transition transition}]
-    (simulate q m steps application (pprinter))))
+    (print-all<! (simulate q m steps application)))
+  
+  nil)

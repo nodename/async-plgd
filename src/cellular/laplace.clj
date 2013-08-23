@@ -1,6 +1,7 @@
 (ns cellular.laplace
-  (:require [cellular.cellular :refer [simulate]]
-            [utils.helpers :refer :all]))
+  (:require [clojure.core.async :refer [>! <! go]]
+            [cellular.cellular :refer [simulate]]
+            [utils.helpers :refer [print-all<!]]))
 
 (def initial-values
   {:north-boundary 0
@@ -37,4 +38,6 @@ with parity ordering."
   [q m steps]
   (let [application {:initial-values initial-values
                      :transition (transitioner (* q m))}]
-    (simulate q m steps application (pprinter))))
+    (print-all<! (simulate q m steps application)))
+  
+  nil)

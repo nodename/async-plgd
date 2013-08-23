@@ -1,6 +1,5 @@
 (ns cellular.cellular
-  (:require [clojure.core.async :refer :all]
-            [clojure.pprint :refer [pprint]]))
+  (:require [clojure.core.async :refer [<! >! chan go]]))
 
 (defn initializer
   [n initial-values]
@@ -131,8 +130,8 @@
     out))
 
 (defn relaxation
-  [q m steps transition]
-  (fn [qi qj channels u]
+  [q m transition]
+  (fn [qi qj channels u steps]
     (let [out (chan)]
       (go
         (let [u (loop [step 0
@@ -150,26 +149,34 @@
 
 (defn outputter
   [q m]
-  (fn [qi qj in out subgrid]
-    (go
-      (dotimes [i m]
-        (let [ii (inc i)]
-          (dotimes [j m]
-            (let [jj (inc j)]
-              (>! out ((subgrid ii) jj))))
-          (copy (* (- q qj) m) in out)))
-      (copy (* (- q qi) m m q) in out))))
+  (fn [qi qj in out]
+    (let [subgrid-in (chan)]
+      (go (while true
+            (let [subgrid (<! subgrid-in)]
+              (dotimes [i m]
+                (let [ii (inc i)]
+                  (dotimes [j m]
+                    (let [jj (inc j)]
+                      (>! out ((subgrid ii) jj))))
+                  (copy (* (- q qj) m) in out)))
+              (copy (* (- q qi) m m q) in out))))
+      subgrid-in)))
+
+(def RELAXATION-STEPS-PER-OUTPUT 1)
   
 (defn node
-  [init relax output]
+  [init relax steps output]
   (fn [qi qj channels]
   ;; qi row number; qj column number
-    (let [{:keys [east west]} channels]
+    (let [{:keys [data-in data-out]} channels
+          out (output qi qj data-in data-out)]
       (go
-        (let [u (init qi qj)
-              u (<! (relax qi qj channels u))]
-          (output qi qj east west u))))))
-
+        (loop [step 0
+               u (init qi qj)]
+          (>! out u)
+          (when (< step steps)
+            (recur (+ RELAXATION-STEPS-PER-OUTPUT step) (<! (relax qi qj channels u RELAXATION-STEPS-PER-OUTPUT)))))))))
+        
 (defmacro get-row
   [n in]
   `(loop [j# 0
@@ -179,19 +186,20 @@
       (recur (inc j#) (conj row# (<! ~in))))))
 
 (defn master
-  "Input the final grid of nXn values (states) from the processors, one element at a time.
+  "Input the grid of nXn values (states) from the processors, one element at a time.
 The single input channel comes from the output function of channel h0q (the last channel of
 the north boundary row, i.e. the channel that receives the output from the pipeline threaded
 through the interior elements only."
   [n in start-time]
   (let [out (chan)]
     (go
-      (let [grid (loop [grid []]
-                   (if (= (count grid) n)
-                     grid
-                     (recur (conj grid (get-row n in)))))
-            elapsed-ms (long (/ (- (System/nanoTime) start-time) 1000000))]
-        (>! out [elapsed-ms grid])))
+      (while true
+        (let [grid (loop [grid []]
+                     (if (= (count grid) n)
+                       grid
+                       (recur (conj grid (get-row n in)))))
+              elapsed-ms (long (/ (- (System/nanoTime) start-time) 1000000))]
+          (>! out [elapsed-ms grid]))))
     out))
 
 (defn simulate
@@ -203,7 +211,7 @@ within the complete nXn grid, where n = q * m
 (m must be even because we did not bother to code for the odd case.)
 After initializing its subgrid, each node will update the subgrid
 a fixed number of times (specified by the steps parameter)
-before outputting the final values to the specified out channel.
+before outputting the final values to the out channel.
 The nodes will update their subgrids simultaneously.
 In numerical analysis, grid iteration is known as relaxation.
 
@@ -214,21 +222,21 @@ The application object must specify:
     and a transition function that returns the next value for a cell
     given the subgrid and the cell's position in the subgrid.
 "
-  [q m steps application out]
+  [q m steps application]
   (let [{:keys [initial-values transition]} application
         chan-row #(vec (repeatedly (inc q) chan)) ;; we only use elements 1 through q of chan-row
         chan-matrix #(vec (repeatedly (inc q) chan-row))
         ew-channels (chan-matrix)
         ns-channels (chan-matrix)
+        output-channels (chan-matrix)
         n (* q m)
         initialize (initializer n initial-values)
         init (newgrid m initialize)
-        relax (relaxation q m steps transition)
+        relax (relaxation q m transition)
         output (outputter q m)
-        start-node (node init relax output)
-        start-time (System/nanoTime)]
-    
-    (go (>! out (<! (master n ((ew-channels 0) q) start-time))))
+        init-node (node init relax steps output)
+        start-time (System/nanoTime)
+        out (master n ((output-channels 0) q) start-time)]
     
     ;; node coordinates range from 1 to q inclusive
     
@@ -236,14 +244,21 @@ The application object must specify:
       (let [channels {:north ((ns-channels (dec i)) 1)
                       :south ((ns-channels i) 1)
                       :east ((ew-channels i) 1)
-                      :west ((ew-channels (dec i)) q)}]
-        (start-node i 1 channels)))
+                      :west ((ew-channels (dec i)) q)
+                      :data-in ((output-channels i) 1)
+                      :data-out ((output-channels (dec i)) q)
+                      }]
+        (init-node i 1 channels)))
     
     (doseq [i (range 1 (inc q))
             j (range 2 (inc q))]
       (let [channels {:north ((ns-channels (dec i)) j)
                       :south ((ns-channels i) j)
                       :east ((ew-channels i) j)
-                      :west ((ew-channels i) (dec j))}]
-        (start-node i j channels)))))
+                      :west ((ew-channels i) (dec j))
+                      :data-in ((output-channels i) j)
+                      :data-out ((output-channels i) (dec j))
+                      }]
+        (init-node i j channels)))
     
+    out))
