@@ -142,10 +142,14 @@
           (>! out u)))
       out)))
 
-(defmacro copy
+(defn copy
   [count in out]
-  `(dotimes [_# ~count]
-    (>! ~out (<! ~in))))
+  (let [done (chan)]
+    (go
+      (dotimes [_ count]
+        (>! out (<! in)))
+      (>! done :done))
+    done))
 
 (defn outputter
   [q m]
@@ -158,8 +162,8 @@
                   (dotimes [j m]
                     (let [jj (inc j)]
                       (>! out ((subgrid ii) jj))))
-                  (copy (* (- q qj) m) in out)))
-              (copy (* (- q qi) m m q) in out))))
+                  (<! (copy (* (- q qj) m) in out))))
+              (<! (copy (* (- q qi) m m q) in out)))))
       subgrid-in)))
 
 (def RELAXATION-STEPS-PER-OUTPUT 1)
