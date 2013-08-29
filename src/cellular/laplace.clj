@@ -34,10 +34,8 @@ with parity ordering."
         (let [residual (- (/ (+ un us ue uw) 4.0) uc)]
           (+ uc (* fopt residual)))))))
 
-(defn run
-  [q m steps]
+(defn simulate-laplace
+  [q m]
   (let [application {:initial-values initial-values
                      :transition (transitioner (* q m))}]
-    (print-all<! (simulate q m steps application)))
-  
-  nil)
+    (simulate q m application)))
