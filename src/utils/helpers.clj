@@ -8,8 +8,7 @@
           (let [value (<! in)]
             (if (nil? value)
               (println "")
-              (do
-                (pprint value))))))
+              (pprint value)))))
     in))
 
 (defn sink []
