@@ -180,13 +180,16 @@
           (>! out u)
           (recur (+ RELAXATION-STEPS-PER-OUTPUT step) (<! (relax qi qj channels u RELAXATION-STEPS-PER-OUTPUT))))))))
         
-(defmacro get-row
+(defn get-row
   [n in]
-  `(loop [j# 0
-         row# []]
-    (if (= j# ~n)
-      row#
-      (recur (inc j#) (conj row# (<! ~in))))))
+  (let [out (chan)]
+    (go 
+      (loop [j 0
+             row []]
+        (if (= j n)
+          (>! out row)
+          (recur (inc j) (conj row (<! in))))))
+    out))
 
 (defn master
   "Input the grid of nXn values (states) from the processors, one element at a time.
@@ -200,7 +203,7 @@ through the interior elements only."
         (let [grid (loop [grid []]
                      (if (= (count grid) n)
                        grid
-                       (recur (conj grid (get-row n in)))))
+                       (recur (conj grid (<! (get-row n in))))))
               elapsed-ms (long (/ (- (System/nanoTime) start-time) 1000000))]
           (>! out {:elapsed-ms elapsed-ms :grid grid}))))
     out))
