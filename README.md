@@ -25,10 +25,7 @@ section 6 of the paper, "Miscellaneous"
 
 #### Usage
 
-Clone the [core.async](http://github.com/clojure/core.async) repo to a
-convenient location. `cd` into the repo and run `lein install`.
-
-Then clone this repo into a convenient location and `cd` into it.
+Clone this repo into a convenient location and `cd` into it.
 
 Then open a repl, and at the prompt, type
 
